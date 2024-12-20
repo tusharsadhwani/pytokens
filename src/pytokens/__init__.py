@@ -784,20 +784,25 @@ class TokenIterator:
 
             # Consume all whitespace on this line and the next.
             found_whitespace = False
+            seen_newline = False
             while self.is_in_bounds():
                 char = self.source[self.current_index]
                 if is_whitespace(char):
                     self.advance()
                     found_whitespace = True
-                elif char == "\n" or (
-                    char == "\r"
-                    and self.current_index + 1 < len(self.source)
-                    and self.source[self.current_index + 1] == "\n"
+                elif not seen_newline and (
+                    char == "\n"
+                    or (
+                        char == "\r"
+                        and self.current_index + 1 < len(self.source)
+                        and self.source[self.current_index + 1] == "\n"
+                    )
                 ):
                     if char == "\r":
                         self.advance()
                     self.advance()
                     found_whitespace = True
+                    seen_newline = True
                     # Move to next line without creating a newline token. But,
                     # if the previous line was all whitespace, whitespace on
                     # the next line is still valid indentation. Avoid consuming
