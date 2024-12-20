@@ -6,7 +6,7 @@ import argparse
 import io
 import os.path
 import tokenize
-from typing import NamedTuple
+from typing import Iterable, NamedTuple
 import warnings
 
 import pytokens
@@ -33,7 +33,13 @@ def cli(argv: list[str] | None = None) -> int:
 
     for filepath in files:
         with open(filepath, "rb") as file:
-            encoding, read_bytes = tokenize.detect_encoding(file.readline)
+            try:
+                encoding, read_bytes = tokenize.detect_encoding(file.readline)
+            except SyntaxError:
+                # Broken `# coding` comment, tokenizer bails, skip file
+                print("\033[1;33mS\033[0m", end="", flush=True)
+                continue
+
             source = b"".join(read_bytes) + file.read()
 
         if args.validate:
@@ -134,20 +140,19 @@ def validate(filepath: str, source: bytes, encoding: str, verbose: bool = True) 
             print("---- GOT", our_token)
 
         if mismatch:
-            if verbose:
-                print("Filepath:", filepath)
-            else:
+            print("Filepath:", filepath)
+            if not verbose:
                 print("\033[1;31mF\033[0m", end="", flush=True)
             raise AssertionError("Tokens do not match")
 
     print("\033[1;32m.\033[0m", end="", flush=True)
 
 
-def find_all_python_files(directory: str) -> list[str]:
+def find_all_python_files(directory: str) -> Iterable[str]:
     """Recursively find all Python files in the given directory."""
-    python_files = []
-    for root, _, files in os.walk(directory):
+    python_files = set()
+    for root, _, files in os.walk(directory, followlinks=False):
         for file in files:
             if file.endswith(".py"):
-                python_files.append(os.path.join(root, file))
+                python_files.add(os.path.join(root, file))
     return python_files

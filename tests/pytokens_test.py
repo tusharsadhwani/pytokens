@@ -2,7 +2,7 @@ from pytokens import tokenize, Token, TokenType
 
 
 def test_tokenize() -> None:
-    source = "def foo():\n    pass\n"
+    source = "def foo():\n    7.e1\n"
     tokens = list(tokenize(source))
     assert tokens == [
         Token(
@@ -30,7 +30,7 @@ def test_tokenize() -> None:
             TokenType.indent, 11, 15, start_line=2, start_col=0, end_line=2, end_col=4
         ),
         Token(
-            TokenType.identifier,
+            TokenType.number,
             15,
             19,
             start_line=2,

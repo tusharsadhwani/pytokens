@@ -115,9 +115,7 @@ class Token:
 
 
 def is_whitespace(char: str) -> bool:
-    return (
-        char == " " or char == "\r" or char == "\t" or char == "\x0b" or char == "\x0c"
-    )
+    return char == " " or char == "\t" or char == "\x0b" or char == "\x0c"
 
 
 class FStringState:
@@ -280,6 +278,8 @@ class TokenIterator:
         )
 
     def newline(self) -> Token:
+        if self.is_in_bounds() and self.source[self.current_index] == "\r":
+            self.advance()
         self.advance()
         in_brackets = self.bracket_level > 0
         token_type = (
@@ -302,52 +302,65 @@ class TokenIterator:
         return self.make_token(TokenType.endmarker)
 
     def decimal(self) -> Token:
-        start_index = self.current_index
+        digit_before_decimal = False
+        if self.source[self.current_index].isdigit():
+            digit_before_decimal = True
+            self.advance()
+
+        # TODO: this is too lax; 1__2 tokenizes successfully
         while self.is_in_bounds() and (
             self.source[self.current_index].isdigit()
             or self.source[self.current_index] == "_"
         ):
             self.advance()
+
         if self.is_in_bounds() and self.source[self.current_index] == ".":
             self.advance()
-            start_index = self.current_index
 
         while self.is_in_bounds() and (
             self.source[self.current_index].isdigit()
             or (
-                self.current_index > start_index
-                and self.source[self.current_index] == "_"
+                self.source[self.current_index] == "_"
+                and self.source[self.current_index - 1].isdigit()
             )
         ):
             self.advance()
-        # Before advancing over the 'e', ensure that at least 1 digit is between the '.' and the 'e', or that there has been at least 1 digit before the 'e'
-        if (
-            self.is_in_bounds()
-            and self.current_index > start_index
+        # Before advancing over the 'e', ensure that there has been at least 1 digit before the 'e'
+        if self.current_index + 1 < len(self.source) and (
+            (digit_before_decimal or self.source[self.current_index - 1].isdigit())
             and (
                 self.source[self.current_index] == "e"
                 or self.source[self.current_index] == "E"
             )
+            and (
+                self.source[self.current_index + 1].isdigit()
+                or (
+                    self.current_index + 2 < len(self.source)
+                    and (
+                        self.source[self.current_index + 1] == "+"
+                        or self.source[self.current_index + 1] == "-"
+                    )
+                    and self.source[self.current_index + 2].isdigit()
+                )
+            )
         ):
             self.advance()
-            if self.is_in_bounds() and (
-                self.source[self.current_index] == "+"
-                or self.source[self.current_index] == "-"
-            ):
-                self.advance()
+            self.advance()
+            # optional third advance not necessary as itll get advanced just below
 
+        # TODO: this is too lax; 1__2 tokenizes successfully
         while self.is_in_bounds() and (
             self.source[self.current_index].isdigit()
             or (
-                self.current_index > start_index
+                (digit_before_decimal or self.source[self.current_index - 1].isdigit())
                 and self.source[self.current_index] == "_"
             )
         ):
             self.advance()
+
         # Complex numbers end in a `j`. But ensure at least 1 digit before it
-        if (
-            self.is_in_bounds()
-            and self.current_index > start_index
+        if self.is_in_bounds() and (
+            (digit_before_decimal or self.source[self.current_index - 1].isdigit())
             and (
                 self.source[self.current_index] == "j"
                 or self.source[self.current_index] == "J"
@@ -648,7 +661,12 @@ class TokenIterator:
         # For lines that are just leading whitespace and a slash or a comment,
         # don't return indents
         next_char = self.peek()
-        if next_char == "#" or next_char == "\\" or next_char == "\n":
+        if (
+            next_char == "#"
+            or next_char == "\\"
+            or next_char == "\r"
+            or next_char == "\n"
+        ):
             return self.make_token(TokenType.whitespace)
 
         new_indent = self.source[start_index : self.current_index]
@@ -771,7 +789,13 @@ class TokenIterator:
                 if is_whitespace(char):
                     self.advance()
                     found_whitespace = True
-                elif char == "\n":
+                elif char == "\n" or (
+                    char == "\r"
+                    and self.current_index + 1 < len(self.source)
+                    and self.source[self.current_index + 1] == "\n"
+                ):
+                    if char == "\r":
+                        self.advance()
                     self.advance()
                     found_whitespace = True
                     # Move to next line without creating a newline token. But,
@@ -792,6 +816,16 @@ class TokenIterator:
                 raise UnexpectedCharacterAfterBackslash
 
             return self.make_token(TokenType.whitespace)
+
+        # \r on its own without a \n following, becomes an op along with the next char
+        if current_char == "\r":
+            self.advance()
+            if self.is_in_bounds():
+                assert self.source[self.current_index] != "\n"
+                self.advance()
+                return self.make_token(TokenType.op)
+
+            return self.newline()
 
         # Indent / dedent checks
         if (
@@ -822,6 +856,11 @@ class TokenIterator:
 
         if current_char == "<":
             self.advance()
+            if self.peek() == ">":
+                # Barry as FLUFL easter egg
+                self.advance()
+                return self.make_token(TokenType.op)
+
             if self.peek() == "<":
                 self.advance()
             if self.peek() == "=":
