@@ -8,28 +8,34 @@ import string
 from typing import Iterator, NewType
 
 
-class Underflow(Exception): ...
+class TokenizeError(Exception): ...
 
 
-class NotAnIndent(Exception): ...
+class IndentationError(TokenizeError): ...
 
 
-class InconsistentUseOfTabsAndSpaces(Exception): ...
+class InconsistentUseOfTabsAndSpaces(IndentationError): ...
 
 
-class DedentDoesNotMatchAnyOuterIndent(Exception): ...
+class DedentDoesNotMatchAnyOuterIndent(IndentationError): ...
 
 
-class UnterminatedString(Exception): ...
+class UnterminatedString(TokenizeError): ...
 
 
-class UnexpectedEOF(Exception): ...
+class UnexpectedEOF(TokenizeError): ...
 
 
-class UnexpectedCharacterAfterBackslash(Exception): ...
+class UnexpectedCharacterAfterBackslash(TokenizeError): ...
 
 
-class UnexpectedCharacter(Exception): ...
+class UnexpectedCharacter(TokenizeError): ...
+
+
+class NotAnIndent(AssertionError): ...
+
+
+class Underflow(AssertionError): ...
 
 
 class TokenType(enum.IntEnum):
@@ -271,6 +277,7 @@ class TokenIterator:
     def pop_fstring_quote(self) -> None:
         if self.fstring_quote is None:
             raise Underflow
+
         self.fstring_quote = (
             None
             if len(self.fstring_quote_stack) == 0
@@ -295,6 +302,9 @@ class TokenIterator:
         return token
 
     def endmarker(self) -> Token:
+        if self.bracket_level != 0:
+            raise UnexpectedEOF
+
         if len(self.indent_stack) > 0:
             _ = self.indent_stack.pop()
             return self.make_token(TokenType.dedent)
