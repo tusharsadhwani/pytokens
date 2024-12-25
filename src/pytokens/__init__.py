@@ -410,10 +410,10 @@ class TokenIterator:
         # jump over `0b`
         self.advance()
         self.advance()
-        while (
-            self.is_in_bounds()
-            and self.source[self.current_index] == "0"
+        while self.is_in_bounds() and (
+            self.source[self.current_index] == "0"
             or self.source[self.current_index] == "1"
+            or self.source[self.current_index] == "_"
         ):
             self.advance()
         if self.is_in_bounds() and (
@@ -424,10 +424,10 @@ class TokenIterator:
             if self.is_in_bounds() and self.source[self.current_index] == "-":
                 self.advance()
 
-        while (
-            self.is_in_bounds()
-            and self.source[self.current_index] == "0"
+        while self.is_in_bounds() and (
+            self.source[self.current_index] == "0"
             or self.source[self.current_index] == "1"
+            or self.source[self.current_index] == "_"
         ):
             self.advance()
         return self.make_token(TokenType.number)
@@ -436,10 +436,10 @@ class TokenIterator:
         # jump over `0o`
         self.advance()
         self.advance()
-        while (
-            self.is_in_bounds()
-            and self.source[self.current_index] >= "0"
+        while self.is_in_bounds() and (
+            self.source[self.current_index] >= "0"
             and self.source[self.current_index] <= "7"
+            or self.source[self.current_index] == "_"
         ):
             self.advance()
         if self.is_in_bounds() and (
@@ -450,10 +450,10 @@ class TokenIterator:
             if self.is_in_bounds() and self.source[self.current_index] == "-":
                 self.advance()
 
-        while (
-            self.is_in_bounds()
-            and self.source[self.current_index] >= "0"
+        while self.is_in_bounds() and (
+            self.source[self.current_index] >= "0"
             and self.source[self.current_index] <= "7"
+            or self.source[self.current_index] == "_"
         ):
             self.advance()
         return self.make_token(TokenType.number)
@@ -462,8 +462,9 @@ class TokenIterator:
         # jump over `0x`
         self.advance()
         self.advance()
-        while (
-            self.is_in_bounds() and self.source[self.current_index] in string.hexdigits
+        while self.is_in_bounds() and (
+            self.source[self.current_index] in string.hexdigits
+            or self.source[self.current_index] == "_"
         ):
             self.advance()
         if self.is_in_bounds() and (
@@ -474,8 +475,9 @@ class TokenIterator:
             if self.is_in_bounds() and self.source[self.current_index] == "-":
                 self.advance()
 
-        while (
-            self.is_in_bounds() and self.source[self.current_index] in string.hexdigits
+        while self.is_in_bounds() and (
+            self.source[self.current_index] in string.hexdigits
+            or self.source[self.current_index] == "_"
         ):
             self.advance()
         return self.make_token(TokenType.number)
