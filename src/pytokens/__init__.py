@@ -255,7 +255,18 @@ class TokenIterator:
             else tok_type
         )
         if self.weird_op_case:
-            self.all_whitespace_on_this_line = False
+            # And we have another weird case INSIDE the weird case.
+            # For some reason when CPython accidentally captures a space
+            # as the next character, i.e. when the token is '\r ',
+            # It DOESN't see it as whitespace, so in that specific case,
+            # we shouldn't set all_whitespace_on_this_line.
+            # I think this is because CPython never expecte to have a
+            # ' ' token in it anyway so it doesn't classify it as
+            # whitespace. So it becomes non-whitespace.
+            # Removing this if stmt breaks test 1001 right now.
+            token_str = self.source[self.prev_index : self.current_index]
+            if token_str == "\r ":
+                self.all_whitespace_on_this_line = False
             self.weird_op_case = False
 
         token = Token(
@@ -685,12 +696,7 @@ class TokenIterator:
         # For lines that are just leading whitespace and a slash or a comment,
         # don't return indents
         next_char = self.peek()
-        if (
-            next_char == "#"
-            or next_char == "\\"
-            or next_char == "\r"
-            or next_char == "\n"
-        ):
+        if next_char == "#" or next_char == "\\" or self.is_newline():
             return self.make_token(TokenType.whitespace)
 
         new_indent = self.source[start_index : self.current_index]
@@ -731,7 +737,6 @@ class TokenIterator:
             and self.current_index + 1 < len(self.source)
             and self.source[self.current_index + 1] == "\n"
         ):
-            self.advance()
             return True
 
         return False
@@ -785,6 +790,16 @@ class TokenIterator:
 
         current_char = self.source[self.current_index]
 
+        # \r on its own without a \n following, it gets merged with the next char
+        if current_char == "\r":
+            self.advance()
+            if not self.is_in_bounds():
+                return self.newline()
+
+            current_char = self.source[self.current_index]
+            if current_char != "\n":
+                self.weird_op_case = True
+
         # Comment check
         if current_char == "#":
             while self.is_in_bounds() and self.peek() != "\n" and self.peek() != "\r":
@@ -814,14 +829,7 @@ class TokenIterator:
                 if is_whitespace(char):
                     self.advance()
                     found_whitespace = True
-                elif not seen_newline and (
-                    char == "\n"
-                    or (
-                        char == "\r"
-                        and self.current_index + 1 < len(self.source)
-                        and self.source[self.current_index + 1] == "\n"
-                    )
-                ):
+                elif not seen_newline and (self.is_newline()):
                     if char == "\r":
                         self.advance()
                     self.advance()
@@ -845,16 +853,6 @@ class TokenIterator:
                 raise UnexpectedCharacterAfterBackslash
 
             return self.make_token(TokenType.whitespace)
-
-        # \r on its own without a \n following, it gets merged with the next char
-        if current_char == "\r":
-            self.advance()
-            if self.is_in_bounds():
-                current_char = self.source[self.current_index]
-                assert current_char != "\n"
-                self.weird_op_case = True
-            else:
-                return self.newline()
 
         # Indent / dedent checks
         if (
