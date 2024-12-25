@@ -54,3 +54,17 @@ def test_tokenize() -> None:
             end_col=0,
         ),
     ]
+
+    # https://github.com/psf/black/issues/3700
+    source = "{\r}"
+    tokens = list(tokenize(source))
+    assert tokens == [
+        Token(TokenType.lbrace, 0, 1, start_line=1, start_col=0, end_line=1, end_col=1),
+        Token(TokenType.rbrace, 1, 3, start_line=1, start_col=1, end_line=1, end_col=3),
+        Token(
+            TokenType.newline, 3, 4, start_line=1, start_col=3, end_line=1, end_col=4
+        ),
+        Token(
+            TokenType.endmarker, 4, 4, start_line=2, start_col=0, end_line=2, end_col=0
+        ),
+    ]

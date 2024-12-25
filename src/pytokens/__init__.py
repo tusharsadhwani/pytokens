@@ -74,14 +74,13 @@ class TokenType(enum.IntEnum):
         if self.name == "identifier":
             return "NAME"
 
-        if self.is_operator(self):
+        if self.is_operator():
             return "OP"
 
         return self.name.upper()
 
-    @staticmethod
-    def is_operator(value: int) -> bool:
-        return TokenType._op_start < value < TokenType._op_end
+    def is_operator(self) -> bool:
+        return TokenType._op_start < self < TokenType._op_end
 
 
 @dataclass
@@ -200,6 +199,10 @@ class TokenIterator:
     fstring_quote_stack: list[str] = field(default_factory=list)
     fstring_quote: str | None = None
 
+    # CPython has a weird bug where every time a bare \r is
+    # present, the next token becomes an OP. regardless of what it is.
+    weird_op_case: bool = False
+
     def is_in_bounds(self) -> bool:
         return self.current_index < len(self.source)
 
@@ -246,8 +249,17 @@ class TokenIterator:
         return False
 
     def make_token(self, tok_type: TokenType) -> Token:
+        token_type = (
+            TokenType.op
+            if self.weird_op_case and not tok_type.is_operator()
+            else tok_type
+        )
+        if self.weird_op_case:
+            self.all_whitespace_on_this_line = False
+            self.weird_op_case = False
+
         token = Token(
-            type=tok_type,
+            type=token_type,
             start_index=self.prev_index,
             end_index=self.current_index,
             start_line=self.prev_line_number,
@@ -832,15 +844,15 @@ class TokenIterator:
 
             return self.make_token(TokenType.whitespace)
 
-        # \r on its own without a \n following, becomes an op along with the next char
+        # \r on its own without a \n following, it gets merged with the next char
         if current_char == "\r":
             self.advance()
             if self.is_in_bounds():
-                assert self.source[self.current_index] != "\n"
-                self.advance()
-                return self.make_token(TokenType.op)
-
-            return self.newline()
+                current_char = self.source[self.current_index]
+                assert current_char != "\n"
+                self.weird_op_case = True
+            else:
+                return self.newline()
 
         # Indent / dedent checks
         if (
