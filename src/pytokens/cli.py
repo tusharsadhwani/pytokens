@@ -36,9 +36,12 @@ def cli(argv: list[str] | None = None) -> int:
             try:
                 encoding, read_bytes = tokenize.detect_encoding(file.readline)
             except SyntaxError:
-                # Broken `# coding` comment, tokenizer bails, skip file
-                print("\033[1;33mS\033[0m", end="", flush=True)
-                continue
+                if args.validate:
+                    # Broken `# coding` comment, tokenizer bails, skip file
+                    print("\033[1;33mS\033[0m", end="", flush=True)
+                    continue
+
+                raise
 
             source = b"".join(read_bytes) + file.read()
 

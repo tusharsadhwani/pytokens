@@ -29,9 +29,6 @@ class UnexpectedEOF(TokenizeError): ...
 class UnexpectedCharacterAfterBackslash(TokenizeError): ...
 
 
-class UnexpectedCharacter(TokenizeError): ...
-
-
 class NotAnIndent(AssertionError): ...
 
 
@@ -66,6 +63,8 @@ class TokenType(enum.IntEnum):
     fstring_end = 23
 
     endmarker = 24
+
+    errortoken = 25
 
     def __repr__(self) -> str:
         return f"TokenType.{self.name}"
@@ -742,14 +741,12 @@ class TokenIterator:
         return False
 
     def name(self) -> Token:
+        # According to PEP 3131, any non-ascii character is valid in a NAME token.
+        # But if we see any non-identifier ASCII character we should stop.
         remaining = self.source[self.current_index :]
-        if not str.isidentifier(remaining[0]):
-            raise UnexpectedCharacter
-
-        for i in range(1, len(remaining) + 1):
-            identifier = remaining[:i]
-            if not str.isidentifier(identifier):
-                length = i - 1
+        for index, char in enumerate(remaining):
+            if ord(char) < 128 and not str.isalnum(char) and char != "_":
+                length = index
                 break
         else:
             length = len(remaining)
