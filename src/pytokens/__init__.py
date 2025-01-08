@@ -880,7 +880,7 @@ class TokenIterator:
                 self.advance()
             return self.make_token(TokenType.whitespace)
 
-        if current_char in ("+", "&", "|", ",", "^", "@", "%", "=", "!", "~"):
+        if current_char in ("+", "&", "|", "^", "@", "%", "=", "!", "~"):
             self.advance()
             if self.peek() == "=":
                 self.advance()
