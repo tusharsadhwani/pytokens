@@ -46,3 +46,16 @@ def test_tokenize() -> None:
         Token(T.newline, 14, 15, start_line=1, start_col=14, end_line=1, end_col=15),
         Token(T.endmarker, 15, 15, start_line=2, start_col=0, end_line=2, end_col=0),
     ]
+
+    source = r'''rf"\N{42}"'''
+    tokens = list(tokenize(source))
+    assert tokens == [
+        Token(T.fstring_start, 0, 3, start_line=1, start_col=0, end_line=1, end_col=3),
+        Token(T.fstring_middle, 3, 5, start_line=1, start_col=3, end_line=1, end_col=5),
+        Token(T.lbrace, 5, 6, start_line=1, start_col=5, end_line=1, end_col=6),
+        Token(T.number, 6, 8, start_line=1, start_col=6, end_line=1, end_col=8),
+        Token(T.rbrace, 8, 9, start_line=1, start_col=8, end_line=1, end_col=9),
+        Token(T.fstring_end, 9, 10, start_line=1, start_col=9, end_line=1, end_col=10),
+        Token(T.newline, 10, 11, start_line=1, start_col=10, end_line=1, end_col=11),
+        Token(T.endmarker, 11, 11, start_line=2, start_col=0, end_line=2, end_col=0),
+    ]

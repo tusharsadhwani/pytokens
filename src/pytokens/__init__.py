@@ -195,7 +195,8 @@ class TokenIterator:
 
     # f-string state
     fstring_state: FStringState = field(default_factory=FStringState)
-    fstring_quote_stack: list[str] = field(default_factory=list)
+    fstring_prefix_quote_stack: list[tuple[str, str]] = field(default_factory=list)
+    fstring_prefix: str | None = None
     fstring_quote: str | None = None
 
     # CPython has a weird bug where every time a bare \r is
@@ -290,20 +291,25 @@ class TokenIterator:
         self.prev_byte_offset = self.byte_offset
         return token
 
-    def push_fstring_quote(self, quote: str) -> None:
-        if self.fstring_quote is not None:
-            self.fstring_quote_stack.append(self.fstring_quote)
+    def push_fstring_prefix_quote(self, prefix: str, quote: str) -> None:
+        if self.fstring_prefix is not None:
+            assert self.fstring_quote is not None
+            self.fstring_prefix_quote_stack.append(
+                (self.fstring_prefix, self.fstring_quote)
+            )
 
+        self.fstring_prefix = prefix
         self.fstring_quote = quote
 
     def pop_fstring_quote(self) -> None:
-        if self.fstring_quote is None:
+        if self.fstring_prefix is None:
+            assert self.fstring_quote is None
             raise Underflow
 
-        self.fstring_quote = (
-            None
-            if len(self.fstring_quote_stack) == 0
-            else self.fstring_quote_stack.pop()
+        self.fstring_prefix, self.fstring_quote = (
+            (None, None)
+            if len(self.fstring_prefix_quote_stack) == 0
+            else self.fstring_prefix_quote_stack.pop()
         )
 
     def newline(self) -> Token:
@@ -524,7 +530,7 @@ class TokenIterator:
             FStringState.in_fstring_expr,
         ):
             prefix, quote = self.string_prefix_and_quotes()
-            self.push_fstring_quote(quote)
+            self.push_fstring_prefix_quote(prefix, quote)
             for _ in range(len(prefix)):
                 self.advance()
             for _ in range(len(quote)):
@@ -547,8 +553,10 @@ class TokenIterator:
                     self.advance()
                     # But don't escape a `\{` or `\}` in f-strings
                     # but DO escape `\N{` in f-strings, that's for unicode characters
+                    # but DON'T escape `\N{` in raw f-strings.
                     if (
-                        self.current_index + 1 < len(self.source)
+                        "r" not in self.fstring_prefix.lower()
+                        and self.current_index + 1 < len(self.source)
                         and self.peek() == "N"
                         and self.peek_next() == "{"
                     ):
