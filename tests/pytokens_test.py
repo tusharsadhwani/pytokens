@@ -59,3 +59,24 @@ def test_tokenize() -> None:
         Token(T.newline, 10, 11, start_line=1, start_col=10, end_line=1, end_col=11),
         Token(T.endmarker, 11, 11, start_line=2, start_col=0, end_line=2, end_col=0),
     ]
+
+
+def test_weird_op_case() -> None:
+    source = "\n#\r0"
+    tokens = list(tokenize(source))
+    assert tokens == [
+        Token(T.nl, 0, 1, start_line=1, start_col=0, end_line=1, end_col=1),
+        Token(T.comment, 1, 2, start_line=2, start_col=0, end_line=2, end_col=1),
+        Token(T.number, 2, 4, start_line=2, start_col=1, end_line=2, end_col=3),
+        Token(T.nl, 4, 5, start_line=2, start_col=3, end_line=2, end_col=4),
+        Token(T.endmarker, 5, 5, start_line=3, start_col=0, end_line=3, end_col=0),
+    ]
+
+    source = "\n\r0"
+    tokens = list(tokenize(source))
+    assert tokens == [
+        Token(T.nl, 0, 1, start_line=1, start_col=0, end_line=1, end_col=1),
+        Token(T.number, 1, 3, start_line=2, start_col=0, end_line=2, end_col=2),
+        Token(T.newline, 3, 4, start_line=2, start_col=2, end_line=2, end_col=3),
+        Token(T.endmarker, 4, 4, start_line=3, start_col=0, end_line=3, end_col=0),
+    ]

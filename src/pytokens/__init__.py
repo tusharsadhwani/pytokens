@@ -202,6 +202,7 @@ class TokenIterator:
     # CPython has a weird bug where every time a bare \r is
     # present, the next token becomes an OP. regardless of what it is.
     weird_op_case: bool = False
+    weird_op_case_nl: bool = False
 
     def is_in_bounds(self) -> bool:
         return self.current_index < len(self.source)
@@ -251,7 +252,9 @@ class TokenIterator:
     def make_token(self, tok_type: TokenType) -> Token:
         token_type = (
             TokenType.op
-            if self.weird_op_case and not tok_type.is_operator()
+            if self.weird_op_case
+            and not tok_type.is_operator()
+            and tok_type not in (TokenType.number, TokenType.string)
             else tok_type
         )
         if self.weird_op_case:
@@ -289,6 +292,8 @@ class TokenIterator:
         self.prev_index = self.current_index
         self.prev_line_number = self.line_number
         self.prev_byte_offset = self.byte_offset
+        self.weird_op_case = False
+
         return token
 
     def push_fstring_prefix_quote(self, prefix: str, quote: str) -> None:
@@ -316,17 +321,18 @@ class TokenIterator:
         if self.is_in_bounds() and self.source[self.current_index] == "\r":
             self.advance()
         self.advance()
-        in_brackets = self.bracket_level > 0
         token_type = (
             TokenType.nl
             if (
-                in_brackets
+                self.weird_op_case_nl
+                or self.bracket_level > 0
                 or self.fstring_state.state == FStringState.in_fstring_expr
                 or self.all_whitespace_on_this_line
             )
             else TokenType.newline
         )
         token = self.make_token(token_type)
+        self.weird_op_case_nl = False
         return token
 
     def endmarker(self) -> Token:
@@ -554,6 +560,7 @@ class TokenIterator:
                     # But don't escape a `\{` or `\}` in f-strings
                     # but DO escape `\N{` in f-strings, that's for unicode characters
                     # but DON'T escape `\N{` in raw f-strings.
+                    assert self.fstring_prefix is not None
                     if (
                         "r" not in self.fstring_prefix.lower()
                         and self.current_index + 1 < len(self.source)
@@ -641,6 +648,10 @@ class TokenIterator:
 
     def string(self) -> Token:
         prefix, quote = self.string_prefix_and_quotes()
+        if prefix and self.weird_op_case:
+            self.advance()
+            return self.make_token(tok_type=TokenType.op)
+
         for char in prefix:
             if char == "f" or char == "F":
                 return self.fstring()
@@ -749,6 +760,10 @@ class TokenIterator:
         return False
 
     def name(self) -> Token:
+        if self.weird_op_case:
+            self.advance()
+            return self.make_token(TokenType.identifier)
+
         # According to PEP 3131, any non-ascii character is valid in a NAME token.
         # But if we see any non-identifier ASCII character we should stop.
         remaining = self.source[self.current_index :]
@@ -795,7 +810,8 @@ class TokenIterator:
 
         current_char = self.source[self.current_index]
 
-        # \r on its own without a \n following, it gets merged with the next char
+        # \r on its own, in certain cases it gets merged with the next char.
+        # It's probably a bug: https://github.com/python/cpython/issues/128233
         if current_char == "\r":
             self.advance()
             if not self.is_in_bounds():
@@ -804,9 +820,18 @@ class TokenIterator:
             current_char = self.source[self.current_index]
             if current_char != "\n":
                 self.weird_op_case = True
+                if (
+                    self.prev_token is not None
+                    and self.prev_token.type == TokenType.comment
+                ):
+                    self.weird_op_case_nl = True
 
         # Comment check
         if current_char == "#":
+            if self.weird_op_case:
+                self.advance()
+                return self.make_token(TokenType.comment)
+
             while self.is_in_bounds() and self.peek() != "\n" and self.peek() != "\r":
                 self.advance()
             return self.make_token(TokenType.comment)
