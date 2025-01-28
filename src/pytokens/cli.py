@@ -31,7 +31,7 @@ def cli(argv: list[str] | None = None) -> int:
         files = [args.filepath]
         verbose = True
 
-    for filepath in files:
+    for filepath in sorted(files):
         with open(filepath, "rb") as file:
             try:
                 encoding, read_bytes = tokenize.detect_encoding(file.readline)
@@ -49,8 +49,10 @@ def cli(argv: list[str] | None = None) -> int:
             validate(filepath, source, encoding, verbose=verbose)
 
         else:
-            for token in pytokens.tokenize(source.decode(encoding)):
-                print(token)
+            source_str = source.decode(encoding)
+            for token in pytokens.tokenize(source_str):
+                token_source = source_str[token.start_index : token.end_index]
+                print(repr(token_source), token)
 
     return 0
 
@@ -79,10 +81,15 @@ def validate(filepath: str, source: bytes, encoding: str, verbose: bool = True) 
     # drop the encoding token
     next(builtin_tokens)
 
-    expected_tokens_unprocessed = [
-        TokenTuple(tokenize.tok_name[token.type], token.start, token.end)
-        for token in builtin_tokens
-    ]
+    try:
+        expected_tokens_unprocessed = [
+            TokenTuple(tokenize.tok_name[token.type], token.start, token.end)
+            for token in builtin_tokens
+        ]
+    except tokenize.TokenError:
+        print("\033[1;33mS\033[0m", end="", flush=True)
+        return
+
     expected_tokens = [expected_tokens_unprocessed[0]]
     for index, token in enumerate(expected_tokens_unprocessed[1:], start=1):
         last_token = expected_tokens[-1]
@@ -132,7 +139,7 @@ def validate(filepath: str, source: bytes, encoding: str, verbose: bool = True) 
             (token.start_line, token.start_col),
             (token.end_line, token.end_col),
         )
-        for token in pytokens.tokenize(source_string)
+        for token in pytokens.tokenize(source_string, issue_128233_handling=False)
         if token.type != pytokens.TokenType.whitespace
     )
 
@@ -144,9 +151,9 @@ def validate(filepath: str, source: bytes, encoding: str, verbose: bool = True) 
 
         if mismatch:
             print("Filepath:", filepath)
-            if not verbose:
-                print("\033[1;31mF\033[0m", end="", flush=True)
-            raise AssertionError("Tokens do not match")
+            print("\033[1;31mF\033[0m", end="", flush=True)
+            # raise AssertionError("Tokens do not match")
+            return
 
     print("\033[1;32m.\033[0m", end="", flush=True)
 

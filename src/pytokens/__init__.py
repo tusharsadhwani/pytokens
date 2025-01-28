@@ -118,10 +118,6 @@ class Token:
         return source[self.start_index : self.end_index]
 
 
-def is_whitespace(char: str) -> bool:
-    return char == " " or char == "\t" or char == "\x0b" or char == "\x0c"
-
-
 class FStringState:
     State = NewType("State", int)
 
@@ -178,6 +174,8 @@ class FStringState:
 @dataclass
 class TokenIterator:
     source: str
+    issue_128233_handling: bool
+
     current_index: int = 0
     prev_index: int = 0
     line_number: int = 1
@@ -691,7 +689,7 @@ class TokenIterator:
         saw_tab_or_space = False
         while self.is_in_bounds():
             char = self.source[self.current_index]
-            if is_whitespace(char):
+            if self.is_whitespace():
                 self.advance()
                 saw_whitespace = True
                 if char == " " or char == "\t":
@@ -746,6 +744,19 @@ class TokenIterator:
 
             # Let the dedent counter make the dedents. They must be length zero
             return self.make_token(TokenType.whitespace)
+
+    def is_whitespace(self) -> bool:
+        if self.is_newline():
+            return False
+
+        char = self.source[self.current_index]
+        return (
+            char == " "
+            or char == "\r"
+            or char == "\t"
+            or char == "\x0b"
+            or char == "\x0c"
+        )
 
     def is_newline(self) -> bool:
         if self.source[self.current_index] == "\n":
@@ -812,7 +823,9 @@ class TokenIterator:
 
         # \r on its own, in certain cases it gets merged with the next char.
         # It's probably a bug: https://github.com/python/cpython/issues/128233
-        if current_char == "\r":
+        # 'issue_128233_handling=True' works around this bug, but if it's False
+        # then we produce identical tokens to CPython.
+        if self.issue_128233_handling is False and current_char == "\r":
             self.advance()
             if not self.is_in_bounds():
                 return self.newline()
@@ -855,11 +868,11 @@ class TokenIterator:
             found_whitespace = False
             seen_newline = False
             while self.is_in_bounds():
-                char = self.source[self.current_index]
-                if is_whitespace(char):
+                if self.is_whitespace():
                     self.advance()
                     found_whitespace = True
                 elif not seen_newline and (self.is_newline()):
+                    char = self.source[self.current_index]
                     if char == "\r":
                         self.advance()
                     self.advance()
@@ -899,9 +912,7 @@ class TokenIterator:
                 return indent_token
 
         if current_char in (" ", "\r", "\t", "\x0b", "\x0c"):
-            while self.is_in_bounds() and is_whitespace(
-                self.source[self.current_index]
-            ):
+            while self.is_in_bounds() and self.is_whitespace():
                 self.advance()
             return self.make_token(TokenType.whitespace)
 
@@ -1079,6 +1090,47 @@ class TokenIterator:
         return self.name()
 
 
-def tokenize(source: str) -> Iterator[Token]:
-    token_iterator = TokenIterator(source)
-    return iter(token_iterator)
+def tokenize(
+    source: str,
+    *,
+    fstring_tokens: bool = True,
+    issue_128233_handling: bool = True,
+) -> Iterator[Token]:
+    token_iterator = TokenIterator(source, issue_128233_handling=issue_128233_handling)
+    if fstring_tokens:
+        return iter(token_iterator)
+
+    return merge_fstring_tokens(token_iterator)
+
+
+def merge_fstring_tokens(token_iterator: TokenIterator) -> Iterator[Token]:
+    """Turn post-Python-3.12 FSTRING-* tokens back to a single STRING token."""
+    for token in token_iterator:
+        if token.type != TokenType.fstring_start:
+            yield token
+            continue
+
+        start_token = token
+        end_token = token
+
+        fstring_starts = 1
+        fstring_ends = 0
+        for token in token_iterator:
+            if token.type == TokenType.fstring_start:
+                fstring_starts += 1
+            if token.type == TokenType.fstring_end:
+                fstring_ends += 1
+
+            if fstring_starts == fstring_ends:
+                end_token = token
+                break
+
+        yield Token(
+            type=TokenType.string,
+            start_index=start_token.start_index,
+            start_line=start_token.start_line,
+            start_col=start_token.start_col,
+            end_index=end_token.end_index,
+            end_line=end_token.end_line,
+            end_col=end_token.end_col,
+        )
