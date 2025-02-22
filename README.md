@@ -11,7 +11,7 @@ pip install pytokens
 ## Usage
 
 ```bash
-pytokens path/to/file.py
+python -m pytokens path/to/file.py
 ```
 
 ## Local Development / Testing
