@@ -1,6 +1,6 @@
 # pytokens
 
-A Fast, spec compliant Python 3.12+ tokenizer that runs on older Pythons.
+A Fast, spec compliant Python 3.13+ tokenizer that runs on older Pythons.
 
 ## Installation
 
