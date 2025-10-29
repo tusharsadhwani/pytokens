@@ -1,1 +1,1 @@
-recursive-include tests *
+recursive-include tests *.py
