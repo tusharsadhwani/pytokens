@@ -254,8 +254,6 @@ class TokenIterator:
         return False
 
     def make_token(self, tok_type: TokenType) -> Token:
-        if self.fstring_prefix is not None:
-            print(self.fstring_prefix)
         if self.fstring_prefix is not None and "t" in self.fstring_prefix:
             if tok_type == TokenType.fstring_start:
                 tok_type = TokenType.tstring_start
