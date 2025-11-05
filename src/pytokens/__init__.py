@@ -62,9 +62,13 @@ class TokenType(enum.IntEnum):
     fstring_middle = 22
     fstring_end = 23
 
-    endmarker = 24
+    tstring_start = 24
+    tstring_middle = 25
+    tstring_end = 26
 
-    errortoken = 25
+    endmarker = 27
+
+    errortoken = 28
 
     def __repr__(self) -> str:
         return f"TokenType.{self.name}"
@@ -250,6 +254,14 @@ class TokenIterator:
         return False
 
     def make_token(self, tok_type: TokenType) -> Token:
+        if self.fstring_prefix is not None and "t" in self.fstring_prefix:
+            if tok_type == TokenType.fstring_start:
+                tok_type = TokenType.tstring_start
+            elif tok_type == TokenType.fstring_middle:
+                tok_type = TokenType.tstring_middle
+            elif tok_type == TokenType.fstring_end:
+                tok_type = TokenType.tstring_end
+
         token_type = (
             TokenType.op
             if self.weird_op_case
@@ -536,6 +548,7 @@ class TokenIterator:
             FStringState.in_fstring_expr,
         ):
             prefix, quote = self.string_prefix_and_quotes()
+
             self.push_fstring_prefix_quote(prefix, quote)
             for _ in range(len(prefix)):
                 self.advance()
@@ -615,9 +628,10 @@ class TokenIterator:
             assert self.fstring_quote is not None
             for _ in range(len(self.fstring_quote)):
                 self.advance()
+            token = self.make_token(TokenType.fstring_end)
             self.pop_fstring_quote()
             self.fstring_state.leave_fstring()
-            return self.make_token(TokenType.fstring_end)
+            return token
 
         if self.fstring_state.state == FStringState.in_fstring_expr_modifier:
             start_index = self.current_index
@@ -653,7 +667,7 @@ class TokenIterator:
             return self.make_token(tok_type=TokenType.op)
 
         for char in prefix:
-            if char == "f" or char == "F":
+            if char in ("f", "F", "t", "T"):
                 return self.fstring()
 
         for _ in range(len(prefix)):
@@ -1076,6 +1090,8 @@ class TokenIterator:
                     "f'",
                     'u"',
                     "u'",
+                    "t'",
+                    't"',
                     ignore_case=True,
                 )
             )
@@ -1090,6 +1106,10 @@ class TokenIterator:
                     "fr'",
                     'rf"',
                     "rf'",
+                    "tr'",
+                    'tr"',
+                    "rt'",
+                    'rt"',
                     ignore_case=True,
                 )
             )
@@ -1115,7 +1135,7 @@ def tokenize(
 def merge_fstring_tokens(token_iterator: TokenIterator) -> Iterator[Token]:
     """Turn post-Python-3.12 FSTRING-* tokens back to a single STRING token."""
     for token in token_iterator:
-        if token.type != TokenType.fstring_start:
+        if token.type not in (TokenType.fstring_start, TokenType.tstring_start):
             yield token
             continue
 
@@ -1125,9 +1145,9 @@ def merge_fstring_tokens(token_iterator: TokenIterator) -> Iterator[Token]:
         fstring_starts = 1
         fstring_ends = 0
         for token in token_iterator:
-            if token.type == TokenType.fstring_start:
+            if token.type in (TokenType.fstring_start, TokenType.tstring_start):
                 fstring_starts += 1
-            if token.type == TokenType.fstring_end:
+            if token.type in (TokenType.fstring_end, TokenType.tstring_end):
                 fstring_ends += 1
 
             if fstring_starts == fstring_ends:
