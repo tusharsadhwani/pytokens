@@ -134,7 +134,6 @@ class FStringState:
 
     def __init__(self) -> None:
         self.state = FStringState.not_fstring
-        self.is_template = False
         self.stack: list[FStringState.State] = []
 
     def enter_fstring(self) -> None:
@@ -255,7 +254,9 @@ class TokenIterator:
         return False
 
     def make_token(self, tok_type: TokenType) -> Token:
-        if self.fstring_state.is_template:
+        if self.fstring_prefix is not None:
+            print(self.fstring_prefix)
+        if self.fstring_prefix is not None and "t" in self.fstring_prefix:
             if tok_type == TokenType.fstring_start:
                 tok_type = TokenType.tstring_start
             elif tok_type == TokenType.fstring_middle:
@@ -549,10 +550,6 @@ class TokenIterator:
             FStringState.in_fstring_expr,
         ):
             prefix, quote = self.string_prefix_and_quotes()
-            if "t" in prefix:
-                self.fstring_state.is_template = True
-            else:
-                self.fstring_state.is_template = False
 
             self.push_fstring_prefix_quote(prefix, quote)
             for _ in range(len(prefix)):
@@ -633,9 +630,10 @@ class TokenIterator:
             assert self.fstring_quote is not None
             for _ in range(len(self.fstring_quote)):
                 self.advance()
+            token = self.make_token(TokenType.fstring_end)
             self.pop_fstring_quote()
             self.fstring_state.leave_fstring()
-            return self.make_token(TokenType.fstring_end)
+            return token
 
         if self.fstring_state.state == FStringState.in_fstring_expr_modifier:
             start_index = self.current_index

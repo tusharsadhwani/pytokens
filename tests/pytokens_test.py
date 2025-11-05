@@ -81,3 +81,29 @@ def test_weird_op_case() -> None:
         Token(T.newline, 3, 4, start_line=2, start_col=2, end_line=2, end_col=3),
         Token(T.endmarker, 4, 4, start_line=3, start_col=0, end_line=3, end_col=0),
     ]
+
+
+def test_nested_f_tstrings() -> None:
+    source = '''t"foo {f'bar'} baz"'''
+    tokens = list(tokenize(source))
+    assert tokens == [
+        Token(T.tstring_start, 0, 2, start_line=1, start_col=0, end_line=1, end_col=2),
+        Token(T.tstring_middle, 2, 6, start_line=1, start_col=2, end_line=1, end_col=6),
+        Token(T.lbrace, 6, 7, start_line=1, start_col=6, end_line=1, end_col=7),
+        Token(T.fstring_start, 7, 9, start_line=1, start_col=7, end_line=1, end_col=9),
+        Token(
+            T.fstring_middle, 9, 12, start_line=1, start_col=9, end_line=1, end_col=12
+        ),
+        Token(
+            T.fstring_end, 12, 13, start_line=1, start_col=12, end_line=1, end_col=13
+        ),
+        Token(T.rbrace, 13, 14, start_line=1, start_col=13, end_line=1, end_col=14),
+        Token(
+            T.tstring_middle, 14, 18, start_line=1, start_col=14, end_line=1, end_col=18
+        ),
+        Token(
+            T.tstring_end, 18, 19, start_line=1, start_col=18, end_line=1, end_col=19
+        ),
+        Token(T.newline, 19, 20, start_line=1, start_col=19, end_line=1, end_col=20),
+        Token(T.endmarker, 20, 20, start_line=2, start_col=0, end_line=2, end_col=0),
+    ]
