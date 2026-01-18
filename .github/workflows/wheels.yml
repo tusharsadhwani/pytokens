@@ -72,7 +72,7 @@ jobs:
           overwrite: true
 
   build_sdist_python_wheel:
-    name: sdist and python wheel
+    name: Build sdist and pure python wheel
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
@@ -80,10 +80,6 @@ jobs:
         name: Install Python
         with:
           python-version: "3.14"
-      # - name: Run check-manifest
-      #   run: |
-      #     pip install check-manifest
-      #     check-manifest -v
       - name: Build sdist and wheel
         run: |
           pip install --upgrade setuptools build
@@ -102,7 +98,7 @@ jobs:
     needs: [build_wheels, build_sdist_python_wheel]
     steps:
      - name: Merge artifacts
-       uses: actions/upload-artifact/merge@v4
+       uses: actions/upload-artifact/merge@v6
        with:
          name: cibw-wheels
          pattern: cibw-wheels-*
