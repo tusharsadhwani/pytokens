@@ -792,15 +792,16 @@ class TokenIterator:
 
         # According to PEP 3131, any non-ascii character is valid in a NAME token.
         # But if we see any non-identifier ASCII character we should stop.
-        remaining = self.source[self.current_index :]
-        for index, char in enumerate(remaining):
-            if ord(char) < 128 and not str.isalnum(char) and char != "_":
-                length = index
+        source = self.source
+        index = self.current_index
+        end = len(source)
+        while index < end:
+            char = source[index]
+            if ord(char) < 128 and not char.isalnum() and char != "_":
                 break
-        else:
-            length = len(remaining)
+            index += 1
 
-        self.advance_by(length)
+        self.advance_by(index - self.current_index)
         return self.make_token(TokenType.identifier)
 
     def __iter__(self) -> TokenIterator:
