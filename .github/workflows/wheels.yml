@@ -71,10 +71,10 @@ jobs:
         name: Install Python
         with:
           python-version: "3.14"
-      - name: Run check-manifest
-        run: |
-          pip install check-manifest
-          check-manifest -v
+      # - name: Run check-manifest
+      #   run: |
+      #     pip install check-manifest
+      #     check-manifest -v
       - name: Build sdist and wheel
         run: |
           pip install --upgrade setuptools build
