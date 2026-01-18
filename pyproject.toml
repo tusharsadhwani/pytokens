@@ -52,7 +52,7 @@ pytokens = ["py.typed"]
 addopts = "--cov --cov-report=term-missing"
 
 [tool.cibuildwheel]
-build-frontend = "build[uv]"
+build-frontend = "build"
 linux.manylinux-x86_64-image = "manylinux_2_28"
 linux.manylinux-aarch64-image = "manylinux_2_28"
 linux.musllinux-x86_64-image = "musllinux_1_2"
