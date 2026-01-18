@@ -1,6 +1,55 @@
+[project]
+name = "pytokens"
+version = "0.3.0"
+description = "A Fast, spec compliant Python 3.14+ tokenizer that runs on older Pythons."
+readme = {file = "README.md", content-type = "text/markdown"}
+requires-python = ">=3.8"
+authors = [{name = "Tushar Sadhwani", email = "tushar.sadhwani000@gmail.com"}]
+license = {file = "LICENSE"}
+classifiers = [
+  "License :: OSI Approved :: MIT License",
+  "Operating System :: OS Independent",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3 :: Only",
+  "Programming Language :: Python :: 3.8",
+  "Programming Language :: Python :: 3.9",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: Implementation :: CPython",
+  "Typing :: Typed",
+]
+urls = {Homepage = "https://github.com/tusharsadhwani/pytokens"}
+
+[project.optional-dependencies]
+dev = [
+  "black",
+  "build",
+  "mypy",
+  "pytest",
+  "pytest-cov",
+  "setuptools",
+  "tox",
+  "twine",
+  "wheel",
+]
+
 [build-system]
 requires = ["setuptools>=64", "wheel", "mypy"]
 build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+license-files = ["LICENSE"]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+pytokens = ["py.typed"]
+
+[tool.pytest.ini_options]
+addopts = "--cov --cov-report=term-missing"
 
 [tool.cibuildwheel]
 build-frontend = "build[uv]"
