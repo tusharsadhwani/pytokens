@@ -1,0 +1,105 @@
+name: Build wheels
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+  pull_request:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.head_ref || github.run_id }}
+  cancel-in-progress: true
+
+permissions: {}
+
+jobs:
+  generate_wheels_matrix:
+    name: Generate wheels matrix
+    runs-on: ubuntu-latest
+    outputs:
+      include: ${{ steps.set-matrix.outputs.include }}
+    steps:
+      - uses: actions/checkout@v6
+      - name: Install cibuildwheel and pypyp
+        run: |
+          pipx install cibuildwheel==3.3.1
+          pipx install pypyp==1.3.0
+      - name: generate matrix
+        if: github.event_name != 'pull_request'
+        run: |
+          {
+            cibuildwheel --print-build-identifiers --platform linux --archs x86_64 \
+            | pyp 'json.dumps({"only": x, "os": "ubuntu-latest"})' \
+            && cibuildwheel --print-build-identifiers --platform linux --archs aarch64 \
+            | pyp 'json.dumps({"only": x, "os": "ubuntu-24.04-arm"})' \
+            && cibuildwheel --print-build-identifiers --platform macos --archs arm64 \
+            | pyp 'json.dumps({"only": x, "os": "macos-latest"})' \
+            && cibuildwheel --print-build-identifiers --platform windows \
+            | pyp 'json.dumps({"only": x, "os": "windows-latest"})'
+          } | pyp 'json.dumps(list(map(json.loads, lines)))' > /tmp/matrix
+      - name: generate matrix (PR)
+        if: github.event_name == 'pull_request'
+        run: |
+          {
+            cibuildwheel --print-build-identifiers --platform linux --archs x86_64 \
+            | pyp 'json.dumps({"only": x, "os": "ubuntu-latest"})'
+          } | pyp 'json.dumps(list(map(json.loads, lines)))' > /tmp/matrix
+        env:
+          CIBW_BUILD: "cp38-* cp314-*"
+      - id: set-matrix
+        run: echo "include=$(cat /tmp/matrix)" | tee -a $GITHUB_OUTPUT
+
+  build_wheels:
+    name: Build ${{ matrix.only }}
+    needs: generate_wheels_matrix
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include: ${{ fromJson(needs.generate_wheels_matrix.outputs.include) }}
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: pypa/cibuildwheel@v3.3.1
+        with:
+          only: ${{ matrix.only }}
+
+      - uses: actions/upload-artifact@v6
+        with:
+          name: cibw-wheels-${{ matrix.only }}
+          path: ./wheelhouse/*.whl
+          overwrite: true
+
+  build_sdist_python_wheel:
+    name: Build sdist and pure python wheel
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        name: Install Python
+        with:
+          python-version: "3.14"
+      - name: Build sdist and wheel
+        run: |
+          pip install --upgrade setuptools build
+          PYTOKENS_USE_MYPYC=0 python -m build
+      - uses: actions/upload-artifact@v6
+        with:
+          name: cibw-wheels-sdist_python_wheel
+          path: |
+            dist/*.whl
+            dist/*.tar.gz
+          overwrite: true
+
+  join_artifacts:
+    name: Join artifacts
+    runs-on: ubuntu-latest
+    needs: [build_wheels, build_sdist_python_wheel]
+    steps:
+     - name: Merge artifacts
+       uses: actions/upload-artifact/merge@v6
+       with:
+         name: cibw-wheels
+         pattern: cibw-wheels-*
+         delete-merged: true

@@ -36,17 +36,11 @@ python -c "import pytokens; print(pytokens.__file__)"
 
 ## Create and upload a package to PyPI
 
-Make sure to bump the version in `setup.cfg`.
-
-Then run the following commands:
-
-```bash
-rm -rf dist
-python -m build
-```
-
-Then upload it to PyPI using [twine](https://twine.readthedocs.io/en/latest/#installation):
-
-```bash
-twine upload dist/*
-```
+1. Make sure to bump the version in `setup.cfg`.
+2. Push to Github so CI can build the wheels and sdist.
+3. Download the artifacts from the CI run.
+  - Find the "Build wheels" job, click "Summary", scroll down to the bottom to see "Artifacts"
+    and download the `cibw-wheels` artifact.
+4. Unzip the artifact.
+5. Upload the contents of the artifact to PyPI
+  - e.g. via `twine upload cibw-wheels/*`

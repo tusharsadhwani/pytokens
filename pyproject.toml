@@ -1,3 +1,22 @@
 [build-system]
 requires = ["setuptools>=64", "wheel", "mypy"]
 build-backend = "setuptools.build_meta"
+
+[tool.cibuildwheel]
+build-frontend = "build[uv]"
+linux.manylinux-x86_64-image = "manylinux_2_28"
+linux.manylinux-aarch64-image = "manylinux_2_28"
+linux.musllinux-x86_64-image = "musllinux_1_2"
+linux.musllinux-aarch64-image = "musllinux_1_2"
+
+enable = []
+
+skip = [
+  "cp313t-*",
+  "*-win32",
+  "*-musllinux_aarch64",
+]
+
+[tool.cibuildwheel.environment]
+MYPYC_OPT_LEVEL = "3"
+MYPYC_DEBUG_LEVEL = "0"
