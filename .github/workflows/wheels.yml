@@ -24,21 +24,30 @@ jobs:
         run: |
           pipx install cibuildwheel==3.3.1
           pipx install pypyp==1.3.0
-      - id: set-matrix
+      - name: generate matrix
+        if: github.event_name != 'pull_request'
         run: |
-          MATRIX=$(
-            {
-              cibuildwheel --print-build-identifiers --platform linux --archs x86_64 \
-              | pyp 'json.dumps({"only": x, "os": "ubuntu-latest"})' \
-              && cibuildwheel --print-build-identifiers --platform linux --archs aarch64 \
-              | pyp 'json.dumps({"only": x, "os": "ubuntu-24.04-arm"})' \
-              && cibuildwheel --print-build-identifiers --platform macos --archs arm64 \
-              | pyp 'json.dumps({"only": x, "os": "macos-latest"})' \
-              && cibuildwheel --print-build-identifiers --platform windows \
-              | pyp 'json.dumps({"only": x, "os": "windows-latest"})'
-            } | pyp 'json.dumps(list(map(json.loads, lines)))'
-          )
-          echo "include=$MATRIX" | tee -a $GITHUB_OUTPUT
+          {
+            cibuildwheel --print-build-identifiers --platform linux --archs x86_64 \
+            | pyp 'json.dumps({"only": x, "os": "ubuntu-latest"})' \
+            && cibuildwheel --print-build-identifiers --platform linux --archs aarch64 \
+            | pyp 'json.dumps({"only": x, "os": "ubuntu-24.04-arm"})' \
+            && cibuildwheel --print-build-identifiers --platform macos --archs arm64 \
+            | pyp 'json.dumps({"only": x, "os": "macos-latest"})' \
+            && cibuildwheel --print-build-identifiers --platform windows \
+            | pyp 'json.dumps({"only": x, "os": "windows-latest"})'
+          } | pyp 'json.dumps(list(map(json.loads, lines)))' > /tmp/matrix
+      - name: generate matrix (PR)
+        if: github.event_name == 'pull_request'
+        run: |
+          {
+            cibuildwheel --print-build-identifiers --platform linux --archs x86_64 \
+            | pyp 'json.dumps({"only": x, "os": "ubuntu-latest"})'
+          } | pyp 'json.dumps(list(map(json.loads, lines)))' > /tmp/matrix
+        env:
+          CIBW_BUILD: "cp38-* cp314-*"
+      - id: set-matrix
+        run: echo "include=$(cat /tmp/matrix)" | tee -a $GITHUB_OUTPUT
 
   build_wheels:
     name: Build ${{ matrix.only }}
