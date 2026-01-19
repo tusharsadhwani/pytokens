@@ -1,11 +1,11 @@
 [project]
 name = "pytokens"
-version = "0.3.0"
+version = "0.4.0"
 description = "A Fast, spec compliant Python 3.14+ tokenizer that runs on older Pythons."
-readme = {file = "README.md", content-type = "text/markdown"}
+readme = { file = "README.md", content-type = "text/markdown" }
 requires-python = ">=3.8"
-authors = [{name = "Tushar Sadhwani", email = "tushar.sadhwani000@gmail.com"}]
-license = {file = "LICENSE"}
+authors = [{ name = "Tushar Sadhwani", email = "tushar.sadhwani000@gmail.com" }]
+license = { file = "LICENSE" }
 classifiers = [
   "License :: OSI Approved :: MIT License",
   "Operating System :: OS Independent",
@@ -21,7 +21,7 @@ classifiers = [
   "Programming Language :: Python :: Implementation :: CPython",
   "Typing :: Typed",
 ]
-urls = {Homepage = "https://github.com/tusharsadhwani/pytokens"}
+urls = { Homepage = "https://github.com/tusharsadhwani/pytokens" }
 
 [project.optional-dependencies]
 dev = [
@@ -41,7 +41,7 @@ requires = ["setuptools>=69", "wheel", "mypy"]
 build-backend = "setuptools.build_meta"
 
 [tool.setuptools]
-package-dir = {"" = "src"}
+package-dir = { "" = "src" }
 license-files = ["LICENSE"]
 
 [tool.setuptools.packages.find]
@@ -63,11 +63,7 @@ linux.musllinux-aarch64-image = "musllinux_1_2"
 
 enable = []
 
-skip = [
-  "cp313t-*",
-  "*-win32",
-  "*-musllinux_aarch64",
-]
+skip = ["cp313t-*", "*-win32", "*-musllinux_aarch64"]
 
 [tool.cibuildwheel.environment]
 MYPYC_OPT_LEVEL = "3"
