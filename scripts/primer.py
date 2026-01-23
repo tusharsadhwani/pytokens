@@ -346,21 +346,23 @@ class PrimerRunner:
 
     def run_primer_for_commit(self, commit: str) -> list[ValidationResult]:
         """Run primer on all repos for a specific pytokens commit."""
-        print(f"\n=== Running primer for commit {commit[:8]} ===\n")
+        # Resolve ref to commit hash (handles branches, tags, remote refs like origin/main)
+        result = subprocess.run(
+            ["git", "rev-parse", commit],
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+        commit_hash = result.stdout.strip()
 
-        # Checkout the commit
-        try:
-            subprocess.run(
-                ["git", "checkout", commit],
-                check=True,
-                capture_output=True,
-                text=True,
-            )
-        except subprocess.CalledProcessError as e:
-            print(f"Git checkout failed for {commit}")
-            print(f"stdout: {e.stdout}")
-            print(f"stderr: {e.stderr}")
-            raise
+        print(f"\n=== Running primer for {commit} ({commit_hash[:8]}) ===\n")
+
+        # Checkout the commit hash
+        subprocess.run(
+            ["git", "checkout", commit_hash],
+            check=True,
+            capture_output=True,
+        )
 
         # Reinstall pytokens
         print("Installing pytokens...")
