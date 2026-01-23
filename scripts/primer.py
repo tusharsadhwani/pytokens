@@ -554,14 +554,19 @@ class PrimerRunner:
             # Restore original state
             print(f"\nRestoring original state: {original_ref}")
             try:
-                subprocess.run(
+                result = subprocess.run(
                     ["git", "checkout", original_ref],
-                    check=True,
                     capture_output=True,
+                    text=True,
                 )
-                # Restore primer files after final checkout
-                restore_primer_files(temp_script, temp_config, primer_script, primer_config)
-            except subprocess.CalledProcessError as e:
+                if result.returncode != 0:
+                    print(f"Failed to checkout {original_ref}")
+                    print(f"stdout: {result.stdout}")
+                    print(f"stderr: {result.stderr}")
+                else:
+                    # Restore primer files after final checkout
+                    restore_primer_files(temp_script, temp_config, primer_script, primer_config)
+            except Exception as e:
                 print(f"Warning: Failed to restore original state: {e}")
 
             # Clean up temp directory
