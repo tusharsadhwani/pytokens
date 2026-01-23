@@ -347,13 +347,19 @@ class PrimerRunner:
     def run_primer_for_commit(self, commit: str) -> list[ValidationResult]:
         """Run primer on all repos for a specific pytokens commit."""
         # Resolve ref to commit hash (handles branches, tags, remote refs like origin/main)
-        result = subprocess.run(
-            ["git", "rev-parse", commit],
-            capture_output=True,
-            text=True,
-            check=True,
-        )
-        commit_hash = result.stdout.strip()
+        try:
+            result = subprocess.run(
+                ["git", "rev-parse", commit],
+                capture_output=True,
+                text=True,
+                check=True,
+            )
+            commit_hash = result.stdout.strip()
+        except subprocess.CalledProcessError as e:
+            print(f"Failed to resolve ref {commit}")
+            print(f"stdout: {e.stdout}")
+            print(f"stderr: {e.stderr}")
+            raise
 
         print(f"\n=== Running primer for {commit} ({commit_hash[:8]}) ===\n")
 
