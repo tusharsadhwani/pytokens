@@ -503,18 +503,6 @@ class PrimerRunner:
             return 1 if has_regressions else 0
 
         finally:
-            # Restore original branch/commit
-            print(f"\nRestoring original state: {original_ref}")
-            subprocess.run(
-                ["git", "checkout", original_ref], check=True, capture_output=True
-            )
-            restore_primer_files()  # Final restore
-            subprocess.run(
-                [sys.executable, "-m", "pip", "install", "-e", ".", "-q"],
-                check=True,
-                capture_output=True,
-            )
-
             # Clean up temp directory
             shutil.rmtree(temp_dir, ignore_errors=True)
 
