@@ -26,11 +26,14 @@ jobs:
       - name: Run primer comparison
         id: primer
         run: |
+          set +e  # Don't exit immediately on error
           python scripts/primer.py compare \
             --base origin/main \
             --pr HEAD \
             --output primer-report.md
-        continue-on-error: true
+          PRIMER_EXIT_CODE=$?
+          echo "exit_code=$PRIMER_EXIT_CODE" >> $GITHUB_OUTPUT
+          exit 0  # Always succeed so subsequent steps run
 
       - name: Post results as PR comment
         if: github.event_name == 'pull_request'
@@ -75,8 +78,8 @@ jobs:
               });
             }
 
-      - name: Check for regressions
-        if: steps.primer.outcome == 'failure'
+      - name: Fail if regressions detected
+        if: steps.primer.outputs.exit_code == '1'
         run: |
           echo "❌ Primer detected regressions"
           exit 1
