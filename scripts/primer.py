@@ -349,7 +349,18 @@ class PrimerRunner:
         print(f"\n=== Running primer for commit {commit[:8]} ===\n")
 
         # Checkout the commit
-        subprocess.run(["git", "checkout", commit], check=True, capture_output=True)
+        try:
+            subprocess.run(
+                ["git", "checkout", commit],
+                check=True,
+                capture_output=True,
+                text=True,
+            )
+        except subprocess.CalledProcessError as e:
+            print(f"Git checkout failed for {commit}")
+            print(f"stdout: {e.stdout}")
+            print(f"stderr: {e.stderr}")
+            raise
 
         # Reinstall pytokens
         print("Installing pytokens...")
@@ -420,7 +431,7 @@ class PrimerRunner:
         shutil.copy2(primer_script, temp_script)
         shutil.copy2(primer_config, temp_config)
 
-        def restore_primer_files():
+        def restore_primer_files() -> None:
             """Restore primer.py and primer.json from temp location."""
             shutil.copy2(temp_script, primer_script)
             shutil.copy2(temp_config, primer_config)
