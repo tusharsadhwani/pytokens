@@ -475,8 +475,12 @@ class PrimerRunner:
 
             # Save report if output file specified
             if output_file:
+                print(f"Writing report to {output_file.absolute()}")
                 output_file.write_text(report)
-                print(f"Report saved to {output_file}")
+                print(f"Report saved to {output_file.absolute()}")
+                print(f"File exists: {output_file.exists()}")
+            else:
+                print("No output file specified")
 
             # Return non-zero if regressions detected
             has_regressions = any(c.new_failures for c in comparisons)
