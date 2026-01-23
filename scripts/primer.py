@@ -552,6 +552,8 @@ class PrimerRunner:
                     check=True,
                     capture_output=True,
                 )
+                # Restore primer files after final checkout
+                restore_primer_files(temp_script, temp_config, primer_script, primer_config)
             except subprocess.CalledProcessError as e:
                 print(f"Warning: Failed to restore original state: {e}")
 
