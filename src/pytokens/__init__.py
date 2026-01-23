@@ -1122,7 +1122,7 @@ def tokenize(
     source: str,
     *,
     fstring_tokens: bool = True,
-    issue_128233_handling: bool = True,
+    issue_128233_handling: bool = False,
 ) -> Iterator[Token]:
     token_iterator = TokenIterator(source, issue_128233_handling=issue_128233_handling)
     if fstring_tokens:
