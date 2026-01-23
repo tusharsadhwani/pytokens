@@ -146,37 +146,11 @@ class PrimerRunner:
 
         return repo_path
 
-    def check_json_support(self) -> bool:
-        """Check if the current pytokens installation supports --json flag."""
-        try:
-            result = subprocess.run(
-                [sys.executable, "-m", "pytokens", "--help"],
-                capture_output=True,
-                text=True,
-                timeout=10,
-                check=False,
-            )
-            return "--json" in result.stdout
-        except Exception:
-            return False
-
     def run_validation(self, repo: Repository) -> ValidationResult:
         """Run pytokens validation on a repository."""
         print(f"Validating {repo.name}...")
 
         repo_path = self.clone_or_update_repo(repo)
-
-        # Check if --json is supported (might be running against old pytokens)
-        if not self.check_json_support():
-            print(f"⚠️  Skipping {repo.name} - pytokens doesn't support --json flag")
-            return ValidationResult(
-                repo_name=repo.name,
-                total_files=0,
-                success_count=0,
-                skip_count=0,
-                failure_count=0,
-                failed_files=[],
-            )
 
         # Run pytokens validator with JSON output
         try:
@@ -398,40 +372,14 @@ class PrimerRunner:
 
     def run_primer_for_commit(
         self,
-        commit: str,
+        commit_hash: str,
         temp_script: Path,
         temp_config: Path,
         primer_script: Path,
         primer_config: Path,
     ) -> list[ValidationResult]:
-        """Run primer on all repos for a specific pytokens commit."""
-        # If it's a remote ref like origin/main, fetch it explicitly with refspec
-        if commit.startswith("origin/"):
-            remote_branch = commit.split("/", 1)[1]  # Extract "main" from "origin/main"
-            subprocess.run(
-                ["git", "fetch", "origin", f"{remote_branch}:{remote_branch}"],
-                capture_output=True,
-                check=False,  # Don't fail if local branch exists
-            )
-            # Now use the local branch ref instead
-            commit = remote_branch
-
-        # Resolve ref to commit hash (handles branches, tags, remote refs like origin/main)
-        try:
-            result = subprocess.run(
-                ["git", "rev-parse", commit],
-                capture_output=True,
-                text=True,
-                check=True,
-            )
-            commit_hash = result.stdout.strip()
-        except subprocess.CalledProcessError as e:
-            print(f"Failed to resolve ref {commit}")
-            print(f"stdout: {e.stdout}")
-            print(f"stderr: {e.stderr}")
-            raise
-
-        print(f"\n=== Running primer for {commit} ({commit_hash[:8]}) ===\n")
+        """Run primer on all repos for a specific pytokens commit hash."""
+        print(f"\n=== Running primer for {commit_hash[:8]} ===\n")
 
         # Checkout the commit hash
         subprocess.run(
@@ -443,19 +391,10 @@ class PrimerRunner:
         # Restore primer files so we always use the NEW primer script
         restore_primer_files(temp_script, temp_config, primer_script, primer_config)
 
-        # Reinstall pytokens (non-editable to avoid cache issues)
+        # Reinstall pytokens
         print("Installing pytokens...")
         subprocess.run(
-            [
-                sys.executable,
-                "-m",
-                "pip",
-                "install",
-                "--force-reinstall",
-                "--no-deps",
-                ".",
-                "-q",
-            ],
+            [sys.executable, "-m", "pip", "install", "-e", ".", "-q"],
             check=True,
             capture_output=True,
         )
@@ -464,7 +403,7 @@ class PrimerRunner:
         results = self.run_all_validations()
 
         # Save results
-        results_file = self.results_dir / f"results-{commit[:8]}.json"
+        results_file = self.results_dir / f"results-{commit_hash[:8]}.json"
         with open(results_file, "w") as f:
             json.dump(
                 [
@@ -489,6 +428,50 @@ class PrimerRunner:
         self, base_commit: str, pr_commit: str, output_file: Path | None = None
     ) -> int:
         """Compare validation results between two commits."""
+        # If it's a remote ref like origin/main, fetch it first
+        for commit in [base_commit, pr_commit]:
+            if commit.startswith("origin/"):
+                remote_branch = commit.split("/", 1)[1]
+                subprocess.run(
+                    ["git", "fetch", "origin", f"{remote_branch}:{remote_branch}"],
+                    capture_output=True,
+                    check=False,
+                )
+
+        # Resolve to commit hashes
+        base_commit_hash = subprocess.run(
+            [
+                "git",
+                "rev-parse",
+                (
+                    base_commit
+                    if not base_commit.startswith("origin/")
+                    else base_commit.split("/", 1)[1]
+                ),
+            ],
+            capture_output=True,
+            text=True,
+            check=True,
+        ).stdout.strip()
+
+        pr_commit_hash = subprocess.run(
+            [
+                "git",
+                "rev-parse",
+                (
+                    pr_commit
+                    if not pr_commit.startswith("origin/")
+                    else pr_commit.split("/", 1)[1]
+                ),
+            ],
+            capture_output=True,
+            text=True,
+            check=True,
+        ).stdout.strip()
+
+        print(f"Base commit: {base_commit} -> {base_commit_hash[:8]}")
+        print(f"PR commit: {pr_commit} -> {pr_commit_hash[:8]}")
+
         # Get current branch/commit to restore later
         result = subprocess.run(
             ["git", "rev-parse", "--abbrev-ref", "HEAD"],
@@ -521,12 +504,12 @@ class PrimerRunner:
         try:
             # Run for base (restore primer files so we use the new primer script)
             base_results = self.run_primer_for_commit(
-                base_commit, temp_script, temp_config, primer_script, primer_config
+                base_commit_hash, temp_script, temp_config, primer_script, primer_config
             )
 
             # Run for PR (restore primer files so we use the new primer script)
             pr_results = self.run_primer_for_commit(
-                pr_commit, temp_script, temp_config, primer_script, primer_config
+                pr_commit_hash, temp_script, temp_config, primer_script, primer_config
             )
 
             # Compare
@@ -546,16 +529,6 @@ class PrimerRunner:
                 print(f"File exists: {output_file.exists()}")
             else:
                 print("No output file specified")
-
-            # Check if validation was actually run
-            base_has_data = any(r.total_files > 0 for r in base_results)
-            pr_has_data = any(r.total_files > 0 for r in pr_results)
-
-            if not base_has_data or not pr_has_data:
-                # Validation was skipped (old commit without --json support)
-                # Return success so the first primer PR can merge
-                print("\n✅ Validation skipped - allowing merge")
-                return 0
 
             # Return non-zero if regressions detected
             has_regressions = any(c.new_failures for c in comparisons)
