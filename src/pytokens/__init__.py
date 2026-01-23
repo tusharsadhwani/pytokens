@@ -765,13 +765,7 @@ class TokenIterator:
             return False
 
         char = self.source[self.current_index]
-        return (
-            char == " "
-            or char == "\r"
-            or char == "\t"
-            or char == "\x0b"
-            or char == "\x0c"
-        )
+        return char == " " or char == "\t"
 
     def is_newline(self) -> bool:
         if self.source[self.current_index] == "\n":
@@ -802,7 +796,7 @@ class TokenIterator:
             index += 1
 
         self.advance_by(index - self.current_index)
-        return self.make_token(TokenType.identifier)
+        return self.make_token(TokenType.string)
 
     def __iter__(self) -> TokenIterator:
         return self
