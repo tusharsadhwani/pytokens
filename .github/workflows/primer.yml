@@ -1,0 +1,79 @@
+name: Primer
+
+on:
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  primer:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+
+      - name: Install pytokens
+        run: |
+          pip install -e .
+
+      - name: Run primer comparison
+        id: primer
+        run: |
+          python scripts/primer.py compare \
+            --base origin/main \
+            --pr HEAD \
+            --output primer-report.md
+        continue-on-error: true
+
+      - name: Post results as PR comment
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            let report;
+            try {
+              report = fs.readFileSync('primer-report.md', 'utf8');
+            } catch (error) {
+              report = '# Pytokens Primer Report\n\n❌ Failed to generate report. Check the workflow logs for details.';
+            }
+
+            // Find existing primer comment
+            const { data: comments } = await github.rest.issues.listComments({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+            });
+
+            const primerComment = comments.find(comment =>
+              comment.user.type === 'Bot' &&
+              comment.body.includes('Pytokens Primer Report')
+            );
+
+            if (primerComment) {
+              // Update existing comment
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: primerComment.id,
+                body: report
+              });
+            } else {
+              // Create new comment
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                body: report
+              });
+            }
+
+      - name: Check for regressions
+        if: steps.primer.outcome == 'failure'
+        run: |
+          echo "❌ Primer detected regressions"
+          exit 1
