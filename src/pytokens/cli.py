@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import argparse
+import enum
 import io
+import json
 import os.path
 import tokenize
 from typing import Iterable, NamedTuple
@@ -12,10 +14,21 @@ import warnings
 import pytokens
 
 
+class ValidationStatus(enum.Enum):
+    """Status of validation for a single file."""
+
+    SUCCESS = "SUCCESS"
+    SKIP = "SKIP"
+    FAILURE = "FAILURE"
+
+
 class CLIArgs:
     filepath: str
     validate: bool
     issue_128233_handling: bool
+    json: bool
+    strict: bool
+    quiet: bool
 
 
 def cli(argv: list[str] | None = None) -> int:
@@ -28,7 +41,26 @@ def cli(argv: list[str] | None = None) -> int:
         action="store_false",
     )
     parser.add_argument("--validate", action="store_true")
+    parser.add_argument(
+        "--json",
+        action="store_true",
+        help="Output validation results as JSON",
+    )
+    parser.add_argument(
+        "--strict",
+        action="store_true",
+        help="Exit with code 1 if any validation failures occur",
+    )
+    parser.add_argument(
+        "--quiet",
+        action="store_true",
+        help="Suppress visual output (dots, S, F)",
+    )
     args = parser.parse_args(argv, namespace=CLIArgs())
+
+    # --json implies --quiet
+    if args.json:
+        args.quiet = True
 
     if os.path.isdir(args.filepath):
         files = find_all_python_files(args.filepath)
@@ -37,6 +69,9 @@ def cli(argv: list[str] | None = None) -> int:
         files = [args.filepath]
         verbose = True
 
+    validation_results: list[dict[str, str]] = []
+    failure_count = 0
+
     for filepath in sorted(files):
         with open(filepath, "rb") as file:
             try:
@@ -44,7 +79,15 @@ def cli(argv: list[str] | None = None) -> int:
             except SyntaxError:
                 if args.validate:
                     # Broken `# coding` comment, tokenizer bails, skip file
-                    print("\033[1;33mS\033[0m", end="", flush=True)
+                    if not args.quiet:
+                        print("\033[1;33mS\033[0m", end="", flush=True)
+                    if args.json:
+                        validation_results.append(
+                            {
+                                "filepath": filepath,
+                                "status": ValidationStatus.SKIP.value,
+                            }
+                        )
                     continue
 
                 raise
@@ -52,13 +95,25 @@ def cli(argv: list[str] | None = None) -> int:
             source = b"".join(read_bytes) + file.read()
 
         if args.validate:
-            validate(
+            status = validate(
                 filepath,
                 source,
                 encoding,
                 verbose=verbose,
                 issue_128233_handling=args.issue_128233_handling,
+                quiet=args.quiet,
             )
+
+            if args.json:
+                validation_results.append(
+                    {
+                        "filepath": filepath,
+                        "status": status.value,
+                    }
+                )
+
+            if status == ValidationStatus.FAILURE:
+                failure_count += 1
 
         else:
             source_str = source.decode(encoding)
@@ -68,6 +123,12 @@ def cli(argv: list[str] | None = None) -> int:
             ):
                 token_source = source_str[token.start_index : token.end_index]
                 print(repr(token_source), token)
+
+    if args.json and args.validate:
+        print(json.dumps(validation_results, indent=2))
+
+    if args.strict and failure_count > 0:
+        return 1
 
     return 0
 
@@ -85,7 +146,8 @@ def validate(
     *,
     issue_128233_handling: bool,
     verbose: bool = True,
-) -> None:
+    quiet: bool = False,
+) -> ValidationStatus:
     """Validate the source code."""
     warnings.simplefilter("ignore")
 
@@ -109,8 +171,9 @@ def validate(
             for token in builtin_tokens
         ]
     except tokenize.TokenError:
-        print("\033[1;33mS\033[0m", end="", flush=True)
-        return
+        if not quiet:
+            print("\033[1;33mS\033[0m", end="", flush=True)
+        return ValidationStatus.SKIP
 
     expected_tokens = [expected_tokens_unprocessed[0]]
     for index, token in enumerate(expected_tokens_unprocessed[1:], start=1):
@@ -174,12 +237,14 @@ def validate(
             print("---- GOT", our_token)
 
         if mismatch:
-            print("Filepath:", filepath)
-            print("\033[1;31mF\033[0m", end="", flush=True)
-            # raise AssertionError("Tokens do not match")
-            return
+            if not quiet:
+                print("Filepath:", filepath)
+                print("\033[1;31mF\033[0m", end="", flush=True)
+            return ValidationStatus.FAILURE
 
-    print("\033[1;32m.\033[0m", end="", flush=True)
+    if not quiet:
+        print("\033[1;32m.\033[0m", end="", flush=True)
+    return ValidationStatus.SUCCESS
 
 
 def find_all_python_files(directory: str) -> Iterable[str]:
