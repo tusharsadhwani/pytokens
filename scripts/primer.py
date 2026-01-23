@@ -507,6 +507,15 @@ class PrimerRunner:
                 base_commit_hash, temp_script, temp_config, primer_script, primer_config
             )
 
+            # Restore original ref before checking out PR commit
+            # This is needed because the PR commit might only be accessible from the original HEAD
+            print(f"\nRestoring original state before PR validation: {original_ref}")
+            subprocess.run(
+                ["git", "checkout", original_ref],
+                check=True,
+                capture_output=True,
+            )
+
             # Run for PR (restore primer files so we use the new primer script)
             pr_results = self.run_primer_for_commit(
                 pr_commit_hash, temp_script, temp_config, primer_script, primer_config
@@ -535,6 +544,17 @@ class PrimerRunner:
             return 1 if has_regressions else 0
 
         finally:
+            # Restore original state
+            print(f"\nRestoring original state: {original_ref}")
+            try:
+                subprocess.run(
+                    ["git", "checkout", original_ref],
+                    check=True,
+                    capture_output=True,
+                )
+            except subprocess.CalledProcessError as e:
+                print(f"Warning: Failed to restore original state: {e}")
+
             # Clean up temp directory
             shutil.rmtree(temp_dir, ignore_errors=True)
 
