@@ -510,11 +510,18 @@ class PrimerRunner:
             # Restore original ref before checking out PR commit
             # This is needed because the PR commit might only be accessible from the original HEAD
             print(f"\nRestoring original state before PR validation: {original_ref}")
-            subprocess.run(
+            result = subprocess.run(
                 ["git", "checkout", original_ref],
-                check=True,
                 capture_output=True,
+                text=True,
             )
+            if result.returncode != 0:
+                print(f"Failed to checkout {original_ref}")
+                print(f"stdout: {result.stdout}")
+                print(f"stderr: {result.stderr}")
+                raise subprocess.CalledProcessError(
+                    result.returncode, result.args, result.stdout, result.stderr
+                )
 
             # Run for PR (restore primer files so we use the new primer script)
             pr_results = self.run_primer_for_commit(
