@@ -765,13 +765,7 @@ class TokenIterator:
             return False
 
         char = self.source[self.current_index]
-        return (
-            char == " "
-            or char == "\r"
-            or char == "\t"
-            or char == "\x0b"
-            or char == "\x0c"
-        )
+        return char == " " or char == "\t"
 
     def is_newline(self) -> bool:
         if self.source[self.current_index] == "\n":
