@@ -511,7 +511,7 @@ class PrimerRunner:
             # This is needed because the PR commit might only be accessible from the original HEAD
             print(f"\nRestoring original state before PR validation: {original_ref}")
             result = subprocess.run(
-                ["git", "checkout", original_ref],
+                ["git", "checkout", "-f", original_ref],
                 capture_output=True,
                 text=True,
             )
@@ -555,7 +555,7 @@ class PrimerRunner:
             print(f"\nRestoring original state: {original_ref}")
             try:
                 result = subprocess.run(
-                    ["git", "checkout", original_ref],
+                    ["git", "checkout", "-f", original_ref],
                     capture_output=True,
                     text=True,
                 )
@@ -563,9 +563,6 @@ class PrimerRunner:
                     print(f"Failed to checkout {original_ref}")
                     print(f"stdout: {result.stdout}")
                     print(f"stderr: {result.stderr}")
-                else:
-                    # Restore primer files after final checkout
-                    restore_primer_files(temp_script, temp_config, primer_script, primer_config)
             except Exception as e:
                 print(f"Warning: Failed to restore original state: {e}")
 
