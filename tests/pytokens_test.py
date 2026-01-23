@@ -107,3 +107,109 @@ def test_nested_f_tstrings() -> None:
         Token(T.newline, 19, 20, start_line=1, start_col=19, end_line=1, end_col=20),
         Token(T.endmarker, 20, 20, start_line=2, start_col=0, end_line=2, end_col=0),
     ]
+
+
+def test_dedent_after_escaped_nl() -> None:
+    source = "if True:\n    if \\\nTrue:\n        pass\n    pass\npass"
+    tokens = list(tokenize(source))
+    assert tokens == [
+        Token(T.identifier, 0, 2, start_line=1, start_col=0, end_line=1, end_col=2),
+        Token(T.whitespace, 2, 3, start_line=1, start_col=2, end_line=1, end_col=3),
+        Token(T.identifier, 3, 7, start_line=1, start_col=3, end_line=1, end_col=7),
+        Token(T.op, 7, 8, start_line=1, start_col=7, end_line=1, end_col=8),
+        Token(T.newline, 8, 9, start_line=1, start_col=8, end_line=1, end_col=9),
+        Token(T.indent, 9, 13, start_line=2, start_col=0, end_line=2, end_col=4),
+        Token(T.identifier, 13, 15, start_line=2, start_col=4, end_line=2, end_col=6),
+        Token(T.whitespace, 15, 16, start_line=2, start_col=6, end_line=2, end_col=7),
+        Token(T.whitespace, 16, 18, start_line=2, start_col=7, end_line=3, end_col=0),
+        Token(T.identifier, 18, 22, start_line=3, start_col=0, end_line=3, end_col=4),
+        Token(T.op, 22, 23, start_line=3, start_col=4, end_line=3, end_col=5),
+        Token(T.newline, 23, 24, start_line=3, start_col=5, end_line=3, end_col=6),
+        Token(T.indent, 24, 32, start_line=4, start_col=0, end_line=4, end_col=8),
+        Token(T.identifier, 32, 36, start_line=4, start_col=8, end_line=4, end_col=12),
+        Token(T.newline, 36, 37, start_line=4, start_col=12, end_line=4, end_col=13),
+        Token(T.whitespace, 37, 41, start_line=5, start_col=0, end_line=5, end_col=4),
+        Token(T.dedent, 41, 41, start_line=5, start_col=4, end_line=5, end_col=4),
+        Token(T.identifier, 41, 45, start_line=5, start_col=4, end_line=5, end_col=8),
+        Token(T.newline, 45, 46, start_line=5, start_col=8, end_line=5, end_col=9),
+        Token(T.whitespace, 46, 46, start_line=6, start_col=0, end_line=6, end_col=0),
+        Token(T.dedent, 46, 46, start_line=6, start_col=0, end_line=6, end_col=0),
+        Token(T.identifier, 46, 50, start_line=6, start_col=0, end_line=6, end_col=4),
+        Token(T.newline, 50, 51, start_line=6, start_col=4, end_line=6, end_col=5),
+        Token(T.endmarker, 51, 51, start_line=7, start_col=0, end_line=7, end_col=0),
+    ]
+
+    source = "if True:\n    if \\\nTrue:\n        pass\n    pass"
+    tokens = list(tokenize(source))
+    assert tokens == [
+        Token(T.identifier, 0, 2, start_line=1, start_col=0, end_line=1, end_col=2),
+        Token(T.whitespace, 2, 3, start_line=1, start_col=2, end_line=1, end_col=3),
+        Token(T.identifier, 3, 7, start_line=1, start_col=3, end_line=1, end_col=7),
+        Token(T.op, 7, 8, start_line=1, start_col=7, end_line=1, end_col=8),
+        Token(T.newline, 8, 9, start_line=1, start_col=8, end_line=1, end_col=9),
+        Token(T.indent, 9, 13, start_line=2, start_col=0, end_line=2, end_col=4),
+        Token(T.identifier, 13, 15, start_line=2, start_col=4, end_line=2, end_col=6),
+        Token(T.whitespace, 15, 16, start_line=2, start_col=6, end_line=2, end_col=7),
+        Token(T.whitespace, 16, 18, start_line=2, start_col=7, end_line=3, end_col=0),
+        Token(T.identifier, 18, 22, start_line=3, start_col=0, end_line=3, end_col=4),
+        Token(T.op, 22, 23, start_line=3, start_col=4, end_line=3, end_col=5),
+        Token(T.newline, 23, 24, start_line=3, start_col=5, end_line=3, end_col=6),
+        Token(T.indent, 24, 32, start_line=4, start_col=0, end_line=4, end_col=8),
+        Token(T.identifier, 32, 36, start_line=4, start_col=8, end_line=4, end_col=12),
+        Token(T.newline, 36, 37, start_line=4, start_col=12, end_line=4, end_col=13),
+        Token(T.whitespace, 37, 41, start_line=5, start_col=0, end_line=5, end_col=4),
+        Token(T.dedent, 41, 41, start_line=5, start_col=4, end_line=5, end_col=4),
+        Token(T.identifier, 41, 45, start_line=5, start_col=4, end_line=5, end_col=8),
+        Token(T.newline, 45, 46, start_line=5, start_col=8, end_line=5, end_col=9),
+        Token(T.dedent, 46, 46, start_line=6, start_col=0, end_line=6, end_col=0),
+        Token(T.endmarker, 46, 46, start_line=6, start_col=0, end_line=6, end_col=0),
+    ]
+
+    source = "if True:\n    if \\\nTrue:\n        pass\npass"
+    tokens = list(tokenize(source))
+    assert tokens == [
+        Token(T.identifier, 0, 2, start_line=1, start_col=0, end_line=1, end_col=2),
+        Token(T.whitespace, 2, 3, start_line=1, start_col=2, end_line=1, end_col=3),
+        Token(T.identifier, 3, 7, start_line=1, start_col=3, end_line=1, end_col=7),
+        Token(T.op, 7, 8, start_line=1, start_col=7, end_line=1, end_col=8),
+        Token(T.newline, 8, 9, start_line=1, start_col=8, end_line=1, end_col=9),
+        Token(T.indent, 9, 13, start_line=2, start_col=0, end_line=2, end_col=4),
+        Token(T.identifier, 13, 15, start_line=2, start_col=4, end_line=2, end_col=6),
+        Token(T.whitespace, 15, 16, start_line=2, start_col=6, end_line=2, end_col=7),
+        Token(T.whitespace, 16, 18, start_line=2, start_col=7, end_line=3, end_col=0),
+        Token(T.identifier, 18, 22, start_line=3, start_col=0, end_line=3, end_col=4),
+        Token(T.op, 22, 23, start_line=3, start_col=4, end_line=3, end_col=5),
+        Token(T.newline, 23, 24, start_line=3, start_col=5, end_line=3, end_col=6),
+        Token(T.indent, 24, 32, start_line=4, start_col=0, end_line=4, end_col=8),
+        Token(T.identifier, 32, 36, start_line=4, start_col=8, end_line=4, end_col=12),
+        Token(T.newline, 36, 37, start_line=4, start_col=12, end_line=4, end_col=13),
+        Token(T.whitespace, 37, 37, start_line=5, start_col=0, end_line=5, end_col=0),
+        Token(T.dedent, 37, 37, start_line=5, start_col=0, end_line=5, end_col=0),
+        Token(T.dedent, 37, 37, start_line=5, start_col=0, end_line=5, end_col=0),
+        Token(T.identifier, 37, 41, start_line=5, start_col=0, end_line=5, end_col=4),
+        Token(T.newline, 41, 42, start_line=5, start_col=4, end_line=5, end_col=5),
+        Token(T.endmarker, 42, 42, start_line=6, start_col=0, end_line=6, end_col=0),
+    ]
+
+    source = "if True:\n    if \\\nTrue:\n        pass\n"
+    tokens = list(tokenize(source))
+    assert tokens == [
+        Token(T.identifier, 0, 2, start_line=1, start_col=0, end_line=1, end_col=2),
+        Token(T.whitespace, 2, 3, start_line=1, start_col=2, end_line=1, end_col=3),
+        Token(T.identifier, 3, 7, start_line=1, start_col=3, end_line=1, end_col=7),
+        Token(T.op, 7, 8, start_line=1, start_col=7, end_line=1, end_col=8),
+        Token(T.newline, 8, 9, start_line=1, start_col=8, end_line=1, end_col=9),
+        Token(T.indent, 9, 13, start_line=2, start_col=0, end_line=2, end_col=4),
+        Token(T.identifier, 13, 15, start_line=2, start_col=4, end_line=2, end_col=6),
+        Token(T.whitespace, 15, 16, start_line=2, start_col=6, end_line=2, end_col=7),
+        Token(T.whitespace, 16, 18, start_line=2, start_col=7, end_line=3, end_col=0),
+        Token(T.identifier, 18, 22, start_line=3, start_col=0, end_line=3, end_col=4),
+        Token(T.op, 22, 23, start_line=3, start_col=4, end_line=3, end_col=5),
+        Token(T.newline, 23, 24, start_line=3, start_col=5, end_line=3, end_col=6),
+        Token(T.indent, 24, 32, start_line=4, start_col=0, end_line=4, end_col=8),
+        Token(T.identifier, 32, 36, start_line=4, start_col=8, end_line=4, end_col=12),
+        Token(T.newline, 36, 37, start_line=4, start_col=12, end_line=4, end_col=13),
+        Token(T.dedent, 37, 37, start_line=5, start_col=0, end_line=5, end_col=0),
+        Token(T.dedent, 37, 37, start_line=5, start_col=0, end_line=5, end_col=0),
+        Token(T.endmarker, 37, 37, start_line=5, start_col=0, end_line=5, end_col=0),
+    ]
