@@ -346,6 +346,17 @@ class PrimerRunner:
 
     def run_primer_for_commit(self, commit: str) -> list[ValidationResult]:
         """Run primer on all repos for a specific pytokens commit."""
+        # If it's a remote ref like origin/main, fetch it explicitly with refspec
+        if commit.startswith("origin/"):
+            remote_branch = commit.split("/", 1)[1]  # Extract "main" from "origin/main"
+            subprocess.run(
+                ["git", "fetch", "origin", f"{remote_branch}:{remote_branch}"],
+                capture_output=True,
+                check=False,  # Don't fail if local branch exists
+            )
+            # Now use the local branch ref instead
+            commit = remote_branch
+
         # Resolve ref to commit hash (handles branches, tags, remote refs like origin/main)
         try:
             result = subprocess.run(
