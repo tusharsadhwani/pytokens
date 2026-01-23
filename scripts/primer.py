@@ -157,6 +157,19 @@ class PrimerRunner:
             )
 
             # Parse JSON output
+            if not result.stdout.strip():
+                print(f"Error: No output from validator for {repo.name}")
+                print(f"stderr: {result.stderr}")
+                print(f"returncode: {result.returncode}")
+                return ValidationResult(
+                    repo_name=repo.name,
+                    total_files=0,
+                    success_count=0,
+                    skip_count=0,
+                    failure_count=0,
+                    failed_files=[],
+                )
+
             validation_data = json.loads(result.stdout)
 
             # Count results
@@ -452,6 +465,9 @@ class PrimerRunner:
 
         def restore_primer_files() -> None:
             """Restore primer.py and primer.json from temp location."""
+            # Ensure directories exist (in case old commit doesn't have them)
+            primer_script.parent.mkdir(parents=True, exist_ok=True)
+            primer_config.parent.mkdir(parents=True, exist_ok=True)
             shutil.copy2(temp_script, primer_script)
             shutil.copy2(temp_config, primer_config)
 
