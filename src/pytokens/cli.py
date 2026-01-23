@@ -82,10 +82,12 @@ def cli(argv: list[str] | None = None) -> int:
                     if not args.quiet:
                         print("\033[1;33mS\033[0m", end="", flush=True)
                     if args.json:
-                        validation_results.append({
-                            "filepath": filepath,
-                            "status": ValidationStatus.SKIP.value,
-                        })
+                        validation_results.append(
+                            {
+                                "filepath": filepath,
+                                "status": ValidationStatus.SKIP.value,
+                            }
+                        )
                     continue
 
                 raise
@@ -103,10 +105,12 @@ def cli(argv: list[str] | None = None) -> int:
             )
 
             if args.json:
-                validation_results.append({
-                    "filepath": filepath,
-                    "status": status.value,
-                })
+                validation_results.append(
+                    {
+                        "filepath": filepath,
+                        "status": status.value,
+                    }
+                )
 
             if status == ValidationStatus.FAILURE:
                 failure_count += 1
