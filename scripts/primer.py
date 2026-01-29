@@ -224,6 +224,7 @@ class PrimerRunner:
         repo_path = self.clone_or_update_repo(repo)
 
         # Run pytokens validator with JSON output
+        result = None
         try:
             result = self._run_subprocess(
                 [
@@ -298,15 +299,18 @@ class PrimerRunner:
             )
         except json.JSONDecodeError as e:
             self.logger.debug(f"JSON parse error for {repo.name}: {e}")
-            print(f"Error: Failed to parse validation output for {repo.name}: {e}")
-            print(f"Output was: {result.stdout[:500]}")
-            return ValidationResult(
-                repo_name=repo.name,
-                total_files=0,
-                success_count=0,
-                skip_count=0,
-                failure_count=0,
-                failed_files=[],
+            print(f"\n{'='*80}")
+            print(f"FATAL ERROR: Failed to parse JSON validation output for {repo.name}")
+            print(f"JSON Error: {e}")
+            if result:
+                print(f"\nFirst 1000 characters of output:")
+                print(f"{result.stdout[:1000]}")
+            print(f"\nThis indicates pytokens is printing non-JSON content to stdout.")
+            print(f"Check that --json mode properly suppresses all diagnostic output.")
+            print(f"{'='*80}\n")
+            raise RuntimeError(
+                f"JSON parsing failed for {repo.name}. "
+                f"Validation output is contaminated with non-JSON content."
             )
 
     def run_all_validations(self) -> list[ValidationResult]:
@@ -320,10 +324,14 @@ class PrimerRunner:
                 )
                 result = self.run_validation(repo)
                 results.append(result)
+            except RuntimeError:
+                # RuntimeError indicates a fatal error (e.g., JSON parsing failure)
+                # Re-raise to fail the entire primer run
+                raise
             except Exception as e:
                 self.logger.debug(f"Exception during validation: {e}", exc_info=True)
                 print(f"Error validating {repo.name}: {e}")
-                # Continue with other repos
+                # Continue with other repos for non-fatal errors
                 continue
 
         return results

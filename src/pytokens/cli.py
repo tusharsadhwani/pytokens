@@ -233,8 +233,9 @@ def validate(
     for builtin_token, our_token in zip(expected_tokens, our_tokens, strict=True):
         mismatch = builtin_token != our_token
         if mismatch or verbose:
-            print("EXPECTED", builtin_token)
-            print("---- GOT", our_token)
+            if not quiet:
+                print("EXPECTED", builtin_token)
+                print("---- GOT", our_token)
 
         if mismatch:
             if not quiet:
