@@ -5,6 +5,8 @@ from __future__ import annotations
 
 import argparse
 import json
+import logging
+import os
 import shutil
 import subprocess
 import sys
@@ -61,8 +63,11 @@ class ComparisonResult:
 class PrimerRunner:
     """Runs primer validation and comparison."""
 
-    def __init__(self, config_path: Path, workspace_dir: Path):
+    def __init__(self, config_path: Path, workspace_dir: Path, debug: bool = False):
         """Initialize primer runner."""
+        self.debug = debug
+        self.logger = logging.getLogger(__name__)
+
         self.config_path = config_path
         self.workspace_dir = workspace_dir
         self.repos_dir = workspace_dir / "repos"
@@ -87,27 +92,90 @@ class PrimerRunner:
         self.settings = config_data.get("settings", {})
         self.timeout = self.settings.get("timeout_per_repo", 300)
 
+        # Debug logging for initialization
+        self.logger.debug(f"Loaded configuration from {config_path}")
+        self.logger.debug(f"Workspace directory: {workspace_dir}")
+        self.logger.debug(f"Found {len(self.repositories)} repositories")
+        for repo in self.repositories:
+            self.logger.debug(f"  - {repo.name} ({repo.ref})")
+        self.logger.debug(f"Timeout per repo: {self.timeout}s")
+
+    def _run_subprocess(
+        self,
+        cmd: list[str],
+        env: dict[str, str] | None = None,
+        description: str = "",
+        **kwargs,
+    ) -> subprocess.CompletedProcess:
+        """Run subprocess with debug-aware output handling."""
+        cmd_str = " ".join(cmd)
+        self.logger.debug(f"Running: {cmd_str}")
+        if description:
+            self.logger.debug(f"Purpose: {description}")
+
+        # Always run the subprocess with capture if it was requested
+        if "capture_output" not in kwargs:
+            kwargs["capture_output"] = True
+
+        # Run the subprocess
+        try:
+            result = subprocess.run(cmd, env=env, **kwargs)
+        except subprocess.CalledProcessError as e:
+            # If debug mode and command failed, log the output before re-raising
+            if self.debug:
+                self.logger.debug(f"Command failed with exit code {e.returncode}")
+                if hasattr(e, "stdout") and e.stdout:
+                    self.logger.debug(
+                        f"stdout: {e.stdout if isinstance(e.stdout, str) else e.stdout.decode()}"
+                    )
+                if hasattr(e, "stderr") and e.stderr:
+                    self.logger.debug(
+                        f"stderr: {e.stderr if isinstance(e.stderr, str) else e.stderr.decode()}"
+                    )
+            raise
+
+        # In debug mode, log the captured output
+        if self.debug:
+            if result.returncode != 0:
+                self.logger.debug(f"Command failed with exit code {result.returncode}")
+            if hasattr(result, "stdout") and result.stdout:
+                self.logger.debug(
+                    f"stdout: {result.stdout if isinstance(result.stdout, str) else result.stdout.decode()}"
+                )
+            if hasattr(result, "stderr") and result.stderr:
+                self.logger.debug(
+                    f"stderr: {result.stderr if isinstance(result.stderr, str) else result.stderr.decode()}"
+                )
+
+        return result
+
     def clone_or_update_repo(self, repo: Repository) -> Path:
         """Clone repository or update if it already exists."""
         repo_path = self.repos_dir / repo.name
 
         if repo_path.exists():
+            self.logger.debug(
+                f"Repository {repo.name} exists at {repo_path}, updating..."
+            )
             print(f"Updating {repo.name}...")
             try:
-                subprocess.run(
+                self._run_subprocess(
                     ["git", "fetch", "origin"],
+                    description=f"Fetching updates for {repo.name}",
                     cwd=repo_path,
                     check=True,
-                    capture_output=True,
                     timeout=self.timeout,
                 )
             except subprocess.CalledProcessError as e:
                 print(f"Warning: Failed to update {repo.name}: {e}")
                 return repo_path
         else:
+            self.logger.debug(
+                f"Repository {repo.name} not found, cloning from {repo.url}"
+            )
             print(f"Cloning {repo.name}...")
             try:
-                subprocess.run(
+                self._run_subprocess(
                     [
                         "git",
                         "clone",
@@ -117,8 +185,8 @@ class PrimerRunner:
                         repo.url,
                         str(repo_path),
                     ],
+                    description=f"Cloning {repo.name}",
                     check=True,
-                    capture_output=True,
                     timeout=self.timeout,
                 )
             except subprocess.CalledProcessError as e:
@@ -126,21 +194,23 @@ class PrimerRunner:
                 raise
 
         # Checkout the specified ref
+        self.logger.debug(f"Checking out ref {repo.ref} for {repo.name}")
         try:
-            subprocess.run(
+            self._run_subprocess(
                 ["git", "checkout", repo.ref],
+                description=f"Checking out {repo.ref}",
                 cwd=repo_path,
                 check=True,
-                capture_output=True,
                 timeout=30,
             )
-            subprocess.run(
+            self._run_subprocess(
                 ["git", "pull"],
+                description="Pulling latest changes",
                 cwd=repo_path,
                 check=True,
-                capture_output=True,
                 timeout=self.timeout,
             )
+            self.logger.debug(f"Successfully checked out {repo.ref}")
         except subprocess.CalledProcessError as e:
             print(f"Warning: Failed to checkout {repo.ref} in {repo.name}: {e}")
 
@@ -148,13 +218,14 @@ class PrimerRunner:
 
     def run_validation(self, repo: Repository) -> ValidationResult:
         """Run pytokens validation on a repository."""
+        self.logger.debug(f"Starting validation for {repo.name}")
         print(f"Validating {repo.name}...")
 
         repo_path = self.clone_or_update_repo(repo)
 
         # Run pytokens validator with JSON output
         try:
-            result = subprocess.run(
+            result = self._run_subprocess(
                 [
                     sys.executable,
                     "-m",
@@ -163,6 +234,7 @@ class PrimerRunner:
                     "--json",
                     str(repo_path),
                 ],
+                description=f"Running pytokens validation on {repo.name}",
                 capture_output=True,
                 text=True,
                 timeout=self.timeout,
@@ -170,6 +242,7 @@ class PrimerRunner:
             )
 
             # Parse JSON output
+            self.logger.debug(f"Parsing validation output for {repo.name}")
             if not result.stdout.strip():
                 print(f"Error: No output from validator for {repo.name}")
                 print(f"stderr: {result.stderr}")
@@ -199,6 +272,10 @@ class PrimerRunner:
                 if item["status"] == "FAILURE"
             ]
 
+            self.logger.debug(
+                f"Validation complete for {repo.name}: {success_count} passed, {failure_count} failed, {skip_count} skipped"
+            )
+
             return ValidationResult(
                 repo_name=repo.name,
                 total_files=len(validation_data),
@@ -209,6 +286,7 @@ class PrimerRunner:
             )
 
         except subprocess.TimeoutExpired:
+            self.logger.debug(f"Validation timeout for {repo.name}")
             print(f"Error: Validation timed out for {repo.name}")
             return ValidationResult(
                 repo_name=repo.name,
@@ -219,6 +297,7 @@ class PrimerRunner:
                 failed_files=[],
             )
         except json.JSONDecodeError as e:
+            self.logger.debug(f"JSON parse error for {repo.name}: {e}")
             print(f"Error: Failed to parse validation output for {repo.name}: {e}")
             print(f"Output was: {result.stdout[:500]}")
             return ValidationResult(
@@ -232,12 +311,17 @@ class PrimerRunner:
 
     def run_all_validations(self) -> list[ValidationResult]:
         """Run validation on all configured repositories."""
+        self.logger.debug("Starting validation suite for all repositories")
         results: list[ValidationResult] = []
-        for repo in self.repositories:
+        for i, repo in enumerate(self.repositories):
             try:
+                self.logger.debug(
+                    f"Processing repository {repo.name} ({i+1}/{len(self.repositories)})"
+                )
                 result = self.run_validation(repo)
                 results.append(result)
             except Exception as e:
+                self.logger.debug(f"Exception during validation: {e}", exc_info=True)
                 print(f"Error validating {repo.name}: {e}")
                 # Continue with other repos
                 continue
@@ -250,6 +334,7 @@ class PrimerRunner:
         pr_results: list[ValidationResult],
     ) -> list[ComparisonResult]:
         """Compare validation results between base and PR."""
+        self.logger.debug("Comparing validation results")
         comparisons: list[ComparisonResult] = []
 
         # Create a dict for easy lookup
@@ -268,6 +353,10 @@ class PrimerRunner:
 
             new_failures = pr_failures - base_failures
             fixed_failures = base_failures - pr_failures
+
+            self.logger.debug(
+                f"Comparing {repo_name}: {len(new_failures)} new, {len(fixed_failures)} fixed"
+            )
 
             comparisons.append(
                 ComparisonResult(
@@ -373,36 +462,76 @@ class PrimerRunner:
     def run_primer_for_commit(
         self,
         commit_hash: str,
-        temp_script: Path,
-        temp_config: Path,
+        temp_repo_dir: Path,
         primer_script: Path,
         primer_config: Path,
     ) -> list[ValidationResult]:
         """Run primer on all repos for a specific pytokens commit hash."""
+        self.logger.debug(f"Running primer for commit {commit_hash}")
         print(f"\n=== Running primer for {commit_hash[:8]} ===\n")
 
-        # Checkout the commit hash
-        subprocess.run(
-            ["git", "checkout", commit_hash],
+        # Clean any untracked files before checkout
+        self._run_subprocess(
+            ["git", "clean", "-fd"],
+            description="Cleaning untracked files",
+            cwd=temp_repo_dir,
             check=True,
-            capture_output=True,
         )
 
-        # Restore primer files so we always use the NEW primer script
-        restore_primer_files(temp_script, temp_config, primer_script, primer_config)
-
-        # Reinstall pytokens
-        print("Installing pytokens...")
-        subprocess.run(
-            [sys.executable, "-m", "pip", "install", "-e", ".", "-q"],
+        # Checkout the commit hash in temp repo (force to overwrite any local changes)
+        self._run_subprocess(
+            ["git", "checkout", "-f", commit_hash],
+            description=f"Checking out commit {commit_hash[:8]}",
+            cwd=temp_repo_dir,
             check=True,
-            capture_output=True,
         )
 
-        # Run validations
-        results = self.run_all_validations()
+        # Copy current primer files to temp repo
+        self.logger.debug("Copying current primer files to temp repo")
+        (temp_repo_dir / "scripts").mkdir(exist_ok=True)
+        shutil.copy2(primer_script, temp_repo_dir / "scripts" / "primer.py")
+        shutil.copy2(primer_config, temp_repo_dir / "primer.json")
+
+        # Create a fresh venv for this commit
+        venv_dir = temp_repo_dir.parent / f"venv-{commit_hash[:8]}"
+        self.logger.debug(f"Creating fresh venv at {venv_dir}")
+        print("Creating fresh virtual environment...")
+        self._run_subprocess(
+            [sys.executable, "-m", "venv", str(venv_dir)],
+            description=f"Creating venv for {commit_hash[:8]}",
+            check=True,
+        )
+
+        # Determine the python executable in the new venv
+        if sys.platform == "win32":
+            venv_python = venv_dir / "Scripts" / "python.exe"
+        else:
+            venv_python = venv_dir / "bin" / "python"
+
+        # Install pytokens from temp repo into fresh venv
+        print("Installing pytokens in fresh environment...")
+        self._run_subprocess(
+            [str(venv_python), "-m", "pip", "install", "-e", str(temp_repo_dir), "-q"],
+            env={**os.environ, "PYTOKENS_USE_MYPYC": "0"},
+            description=f"Installing pytokens for {commit_hash[:8]}",
+            check=True,
+        )
+
+        # Temporarily replace sys.executable to use the venv python for validations
+        self.logger.debug(f"Using venv python: {venv_python}")
+        original_executable = sys.executable
+        sys.executable = str(venv_python)
+
+        try:
+            # Run validations
+            self.logger.debug("Running validations")
+            results = self.run_all_validations()
+        finally:
+            # Restore original sys.executable
+            sys.executable = original_executable
 
         # Save results
+        self.logger.debug("Validation complete, saving results")
         results_file = self.results_dir / f"results-{commit_hash[:8]}.json"
         with open(results_file, "w") as f:
             json.dump(
@@ -421,6 +550,7 @@ class PrimerRunner:
                 indent=2,
             )
 
+        self.logger.debug(f"Results saved to {results_file}")
         print(f"\nResults saved to {results_file}")
         return results
 
@@ -428,107 +558,62 @@ class PrimerRunner:
         self, base_commit: str, pr_commit: str, output_file: Path | None = None
     ) -> int:
         """Compare validation results between two commits."""
-        # If it's a remote ref like origin/main, fetch it first
-        for commit in [base_commit, pr_commit]:
-            if commit.startswith("origin/"):
-                remote_branch = commit.split("/", 1)[1]
-                subprocess.run(
-                    ["git", "fetch", "origin", f"{remote_branch}:{remote_branch}"],
-                    capture_output=True,
-                    check=False,
-                )
+        # Get current working directory (the real repo)
+        current_dir = Path.cwd()
 
-        # Resolve to commit hashes
-        base_commit_hash = subprocess.run(
-            [
-                "git",
-                "rev-parse",
-                (
-                    base_commit
-                    if not base_commit.startswith("origin/")
-                    else base_commit.split("/", 1)[1]
-                ),
-            ],
+        # Resolve to commit hashes in current repo
+        self.logger.debug(f"Resolving base commit: {base_commit}")
+        base_commit_hash = self._run_subprocess(
+            ["git", "rev-parse", base_commit],
+            description="Resolving base commit hash",
             capture_output=True,
             text=True,
             check=True,
         ).stdout.strip()
 
-        pr_commit_hash = subprocess.run(
-            [
-                "git",
-                "rev-parse",
-                (
-                    pr_commit
-                    if not pr_commit.startswith("origin/")
-                    else pr_commit.split("/", 1)[1]
-                ),
-            ],
+        self.logger.debug(f"Resolving PR commit: {pr_commit}")
+        pr_commit_hash = self._run_subprocess(
+            ["git", "rev-parse", pr_commit],
+            description="Resolving PR commit hash",
             capture_output=True,
             text=True,
             check=True,
         ).stdout.strip()
 
+        self.logger.debug(f"Base: {base_commit_hash}, PR: {pr_commit_hash}")
         print(f"Base commit: {base_commit} -> {base_commit_hash[:8]}")
         print(f"PR commit: {pr_commit} -> {pr_commit_hash[:8]}")
 
-        # Get current branch/commit to restore later
-        result = subprocess.run(
-            ["git", "rev-parse", "--abbrev-ref", "HEAD"],
-            capture_output=True,
-            text=True,
-            check=True,
-        )
-        original_ref = result.stdout.strip()
-        if original_ref == "HEAD":
-            # Detached HEAD, get the commit hash
-            result = subprocess.run(
-                ["git", "rev-parse", "HEAD"],
-                capture_output=True,
-                text=True,
-                check=True,
-            )
-            original_ref = result.stdout.strip()
-
-        # Save current primer.py and primer.json to preserve them across checkouts
+        # Create a temp directory and clone the repo there
+        self.logger.debug("Creating temp directory for git operations")
         temp_dir = Path(tempfile.mkdtemp())
+        temp_repo_dir = temp_dir / "repo"
+
         primer_script = Path(__file__)
         primer_config = self.config_path
 
-        # Copy to temp location
-        temp_script = temp_dir / "primer.py"
-        temp_config = temp_dir / "primer.json"
-        shutil.copy2(primer_script, temp_script)
-        shutil.copy2(primer_config, temp_config)
-
         try:
-            # Run for base (restore primer files so we use the new primer script)
+            # Clone the current repo to temp directory
+            self.logger.debug(f"Cloning repo to temp directory: {temp_repo_dir}")
+            print(f"Cloning repo to temporary directory...")
+            self._run_subprocess(
+                ["git", "clone", str(current_dir), str(temp_repo_dir)],
+                description="Cloning repo to temp directory",
+                check=True,
+            )
+
+            # Run for base commit
             base_results = self.run_primer_for_commit(
-                base_commit_hash, temp_script, temp_config, primer_script, primer_config
+                base_commit_hash, temp_repo_dir, primer_script, primer_config
             )
 
-            # Restore original ref before checking out PR commit
-            # This is needed because the PR commit might only be accessible from the original HEAD
-            print(f"\nRestoring original state before PR validation: {original_ref}")
-            result = subprocess.run(
-                ["git", "checkout", "-f", original_ref],
-                capture_output=True,
-                text=True,
-            )
-            if result.returncode != 0:
-                print(f"Failed to checkout {original_ref}")
-                print(f"stdout: {result.stdout}")
-                print(f"stderr: {result.stderr}")
-                raise subprocess.CalledProcessError(
-                    result.returncode, result.args, result.stdout, result.stderr
-                )
-
-            # Run for PR (restore primer files so we use the new primer script)
+            # Run for PR commit
             pr_results = self.run_primer_for_commit(
-                pr_commit_hash, temp_script, temp_config, primer_script, primer_config
+                pr_commit_hash, temp_repo_dir, primer_script, primer_config
             )
 
             # Compare
+            self.logger.debug("Comparing results between base and PR")
             comparisons = self.compare_results(base_results, pr_results)
 
             # Generate report
@@ -548,31 +633,24 @@ class PrimerRunner:
 
             # Return non-zero if regressions detected
             has_regressions = any(c.new_failures for c in comparisons)
+            self.logger.debug(f"Regressions detected: {has_regressions}")
             return 1 if has_regressions else 0
 
         finally:
-            # Restore original state
-            print(f"\nRestoring original state: {original_ref}")
-            try:
-                result = subprocess.run(
-                    ["git", "checkout", "-f", original_ref],
-                    capture_output=True,
-                    text=True,
-                )
-                if result.returncode != 0:
-                    print(f"Failed to checkout {original_ref}")
-                    print(f"stdout: {result.stdout}")
-                    print(f"stderr: {result.stderr}")
-            except Exception as e:
-                print(f"Warning: Failed to restore original state: {e}")
-
             # Clean up temp directory
+            self.logger.debug("Cleaning up temp directory")
             shutil.rmtree(temp_dir, ignore_errors=True)
+            print(f"Cleaned up temporary directory")
 
 
 def main() -> int:
     """Main entry point."""
     parser = argparse.ArgumentParser(description="Pytokens primer validation tool")
+    parser.add_argument(
+        "--debug",
+        action="store_true",
+        help="Enable debug logging and show subprocess output",
+    )
     subparsers = parser.add_subparsers(dest="command", required=True)
 
     # Run command
@@ -605,6 +683,12 @@ def main() -> int:
 
     args = parser.parse_args()
 
+    # Configure logging based on debug flag
+    if args.debug:
+        logging.basicConfig(level=logging.DEBUG, format="[DEBUG] %(message)s")
+    else:
+        logging.basicConfig(level=logging.WARNING, format="%(message)s")
+
     # Resolve paths
     config_path = Path(args.config)
     workspace_dir = Path(args.workspace)
@@ -613,7 +697,7 @@ def main() -> int:
         print(f"Error: Config file not found: {config_path}")
         return 1
 
-    runner = PrimerRunner(config_path, workspace_dir)
+    runner = PrimerRunner(config_path, workspace_dir, debug=args.debug)
 
     if args.command == "run":
         results = runner.run_all_validations()
