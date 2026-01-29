@@ -570,6 +570,21 @@ class PrimerRunner:
         # Get current working directory (the real repo)
         current_dir = Path.cwd()
 
+        # If base_commit looks like a remote ref (e.g., origin/main), fetch it first
+        if "/" in base_commit and base_commit.startswith("origin/"):
+            branch_name = base_commit.split("/", 1)[1]
+            self.logger.debug(f"Fetching remote branch: {branch_name}")
+            print(f"Fetching {branch_name} from origin...")
+            try:
+                self._run_subprocess(
+                    ["git", "fetch", "origin", branch_name],
+                    description=f"Fetching {branch_name}",
+                    check=True,
+                )
+            except subprocess.CalledProcessError as e:
+                self.logger.debug(f"Fetch failed: {e}")
+                print(f"Warning: Failed to fetch {branch_name}, trying to continue...")
+
         # Resolve to commit hashes in current repo
         self.logger.debug(f"Resolving base commit: {base_commit}")
         base_commit_hash = self._run_subprocess(
