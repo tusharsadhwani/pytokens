@@ -13,6 +13,7 @@ import sys
 import tempfile
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Any
 
 
 def restore_primer_files(
@@ -105,8 +106,8 @@ class PrimerRunner:
         cmd: list[str],
         env: dict[str, str] | None = None,
         description: str = "",
-        **kwargs,
-    ) -> subprocess.CompletedProcess:
+        **kwargs: Any,
+    ) -> subprocess.CompletedProcess[Any]:
         """Run subprocess with debug-aware output handling."""
         cmd_str = " ".join(cmd)
         self.logger.debug(f"Running: {cmd_str}")
