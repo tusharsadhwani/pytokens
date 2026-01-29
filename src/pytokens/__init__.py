@@ -796,7 +796,7 @@ class TokenIterator:
             index += 1
 
         self.advance_by(index - self.current_index)
-        return self.make_token(TokenType.string)
+        return self.make_token(TokenType.identifier)
 
     def __iter__(self) -> TokenIterator:
         return self
