@@ -908,7 +908,7 @@ class TokenIterator:
                     else:
                         self.next_line()
                         # Preserve this boolean, we're on the same line semantically
-                        self.all_whitespace_on_this_line = False
+                        # self.all_whitespace_on_this_line = False
 
                 else:
                     break
