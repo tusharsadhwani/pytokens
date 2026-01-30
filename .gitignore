@@ -7,3 +7,5 @@ build
 dist
 .tox
 .coverage*
+*.so
+.primer-cache
