@@ -576,14 +576,30 @@ class PrimerRunner:
             self.logger.debug(f"Fetching remote branch: {branch_name}")
             print(f"Fetching {branch_name} from origin...")
             try:
+                # Fetch with enough depth to ensure we get the commit history
+                # In CI shallow clones, we need to unshallow or fetch with sufficient depth
                 self._run_subprocess(
-                    ["git", "fetch", "origin", branch_name],
+                    ["git", "fetch", "--depth=100", "origin", branch_name],
                     description=f"Fetching {branch_name}",
                     check=True,
                 )
             except subprocess.CalledProcessError as e:
-                self.logger.debug(f"Fetch failed: {e}")
-                print(f"Warning: Failed to fetch {branch_name}, trying to continue...")
+                self.logger.debug(f"Fetch with depth failed, trying unshallow: {e}")
+                try:
+                    # If depth fetch fails, try to unshallow
+                    self._run_subprocess(
+                        ["git", "fetch", "--unshallow", "origin"],
+                        description="Unshallowing repository",
+                        check=True,
+                    )
+                except subprocess.CalledProcessError:
+                    self.logger.debug(f"Unshallow also failed, trying simple fetch")
+                    # Last resort: simple fetch
+                    self._run_subprocess(
+                        ["git", "fetch", "origin", branch_name],
+                        description=f"Fetching {branch_name} (simple)",
+                        check=False,
+                    )
 
         # Resolve to commit hashes in current repo
         self.logger.debug(f"Resolving base commit: {base_commit}")
@@ -617,6 +633,17 @@ class PrimerRunner:
         primer_config = self.config_path
 
         try:
+            # Get the origin URL from the current repo
+            origin_url_result = self._run_subprocess(
+                ["git", "config", "--get", "remote.origin.url"],
+                description="Getting origin URL",
+                cwd=current_dir,
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            origin_url = origin_url_result.stdout.strip() if origin_url_result.returncode == 0 else None
+
             # Clone the current repo to temp directory
             self.logger.debug(f"Cloning repo to temp directory: {temp_repo_dir}")
             print(f"Cloning repo to temporary directory...")
@@ -626,15 +653,27 @@ class PrimerRunner:
                 check=True,
             )
 
-            # Fetch all commits from origin to ensure we have the commits we need
-            self.logger.debug("Fetching all refs from origin")
-            print(f"Fetching commits from origin...")
-            self._run_subprocess(
-                ["git", "fetch", "origin"],
-                description="Fetching all commits from origin",
-                cwd=temp_repo_dir,
-                check=True,
-            )
+            # If we have an origin URL, update the temp repo's origin to point to it
+            # and fetch the commits we need from the actual remote
+            if origin_url:
+                self.logger.debug(f"Updating origin URL to: {origin_url}")
+                self._run_subprocess(
+                    ["git", "remote", "set-url", "origin", origin_url],
+                    description="Updating origin URL",
+                    cwd=temp_repo_dir,
+                    check=True,
+                )
+
+                # Fetch enough history to ensure we have both commits
+                # We can't fetch arbitrary commit SHAs, so we fetch all branches
+                self.logger.debug("Fetching all branches from origin")
+                print(f"Fetching branches from origin...")
+                self._run_subprocess(
+                    ["git", "fetch", "origin", "+refs/heads/*:refs/remotes/origin/*"],
+                    description="Fetching all branches",
+                    cwd=temp_repo_dir,
+                    check=True,
+                )
 
             # Run for base commit
             base_results = self.run_primer_for_commit(
