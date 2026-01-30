@@ -1,0 +1,53 @@
+{
+  "repositories": [
+    {
+      "name": "black",
+      "url": "https://github.com/psf/black",
+      "ref": "main"
+    },
+    {
+      "name": "mypy",
+      "url": "https://github.com/python/mypy",
+      "ref": "master"
+    },
+    {
+      "name": "django",
+      "url": "https://github.com/django/django",
+      "ref": "main"
+    },
+    {
+      "name": "flask",
+      "url": "https://github.com/pallets/flask",
+      "ref": "main"
+    },
+    {
+      "name": "requests",
+      "url": "https://github.com/psf/requests",
+      "ref": "main"
+    },
+    {
+      "name": "pytest",
+      "url": "https://github.com/pytest-dev/pytest",
+      "ref": "main"
+    },
+    {
+      "name": "fastapi",
+      "url": "https://github.com/tiangolo/fastapi",
+      "ref": "master"
+    },
+    {
+      "name": "httpx",
+      "url": "https://github.com/encode/httpx",
+      "ref": "master"
+    },
+    {
+      "name": "cpython",
+      "url": "https://github.com/python/cpython",
+      "ref": "main"
+    }
+  ],
+  "settings": {
+    "cache_dir": ".primer-cache",
+    "timeout_per_repo": 300
+  }
+}
