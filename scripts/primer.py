@@ -626,6 +626,16 @@ class PrimerRunner:
                 check=True,
             )
 
+            # Fetch all commits from origin to ensure we have the commits we need
+            self.logger.debug("Fetching all refs from origin")
+            print(f"Fetching commits from origin...")
+            self._run_subprocess(
+                ["git", "fetch", "origin"],
+                description="Fetching all commits from origin",
+                cwd=temp_repo_dir,
+                check=True,
+            )
+
             # Run for base commit
             base_results = self.run_primer_for_commit(
                 base_commit_hash, temp_repo_dir, primer_script, primer_config
