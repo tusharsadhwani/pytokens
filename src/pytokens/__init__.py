@@ -206,6 +206,8 @@ class TokenIterator:
 
     weird_whitespace_case: bool = False
 
+    line_after_escaped_nl: bool = False
+
     def is_in_bounds(self) -> bool:
         return self.current_index < len(self.source)
 
@@ -229,6 +231,7 @@ class TokenIterator:
         self.line_number += 1
         self.byte_offset = 0
         self.all_whitespace_on_this_line = True
+        self.line_after_escaped_nl = False
 
     def advance_check_newline(self) -> None:
         if self.source[self.current_index] == "\n":
@@ -745,6 +748,8 @@ class TokenIterator:
                 raise InconsistentUseOfTabsAndSpaces
             self.indent_stack.append(new_indent)
             return self.make_token(TokenType.indent)
+        elif self.line_after_escaped_nl:
+            raise NotAnIndent
         else:
             while len(self.indent_stack) > 0:
                 top_indent = self.indent_stack[-1]
@@ -873,7 +878,11 @@ class TokenIterator:
         # Empty the dedent counter
         if self.dedent_counter > 0:
             self.dedent_counter -= 1
-            return self.make_token(TokenType.dedent)
+
+            # Dedents after an escaped newline should be treated as a dedent
+            # without emmitting a dedent token
+            if not self.line_after_escaped_nl:
+                return self.make_token(TokenType.dedent)
 
         # Newline check
         if self.is_newline():
@@ -916,6 +925,7 @@ class TokenIterator:
             if not found_whitespace:
                 raise UnexpectedCharacterAfterBackslash
 
+            self.line_after_escaped_nl = True
             return self.make_token(TokenType.whitespace)
 
         # Indent / dedent checks
