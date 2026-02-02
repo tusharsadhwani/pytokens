@@ -21,7 +21,9 @@ classifiers = [
   "Programming Language :: Python :: Implementation :: CPython",
   "Typing :: Typed",
 ]
-urls = { Homepage = "https://github.com/tusharsadhwani/pytokens" }
+[project.urls]
+Homepage = "https://github.com/tusharsadhwani/pytokens"
+Changelog = "https://github.com/tusharsadhwani/pytokens/blob/main/CHANGELOG.md"
 
 [project.optional-dependencies]
 dev = [

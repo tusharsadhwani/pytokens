@@ -2,3 +2,4 @@ recursive-include tests *.py
 recursive-include scripts *.py
 include *.json
 include tox.ini
+include CHANGELOG.md
