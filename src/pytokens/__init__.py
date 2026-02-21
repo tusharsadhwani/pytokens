@@ -331,7 +331,7 @@ class TokenIterator:
         )
 
     def newline(self) -> Token:
-        if self.is_in_bounds() and self.source[self.current_index] == "\r":
+        if self.is_newline() == 2:
             self.advance()
         self.advance()
         token_type = (
@@ -772,23 +772,27 @@ class TokenIterator:
         char = self.source[self.current_index]
         return (
             char == " "
-            or char == "\r"
+            or (char == "\r" and not self.issue_128233_handling)
             or char == "\t"
             or char == "\x0b"
             or char == "\x0c"
         )
 
-    def is_newline(self) -> bool:
+    def is_newline(self) -> int:
+        if not self.is_in_bounds():
+            return 0
         if self.source[self.current_index] == "\n":
-            return True
+            return 1
         if (
             self.source[self.current_index] == "\r"
             and self.current_index + 1 < len(self.source)
             and self.source[self.current_index + 1] == "\n"
         ):
-            return True
+            return 2
+        if self.issue_128233_handling and self.source[self.current_index] == "\r":
+            return 1
 
-        return False
+        return 0
 
     def name(self) -> Token:
         if self.weird_op_case:
@@ -901,9 +905,8 @@ class TokenIterator:
                 if self.is_whitespace():
                     self.advance()
                     found_whitespace = True
-                elif not seen_newline and (self.is_newline()):
-                    char = self.source[self.current_index]
-                    if char == "\r":
+                elif not seen_newline and (advance_count := self.is_newline()):
+                    if advance_count == 2:
                         self.advance()
                     self.advance()
                     found_whitespace = True
