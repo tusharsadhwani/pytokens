@@ -18,6 +18,7 @@ jobs:
           - { python-version: "3.12", tox-env: "py312" }
           - { python-version: "3.13", tox-env: "py313" }
           - { python-version: "3.14", tox-env: "py314,py314-type" }
+          - { python-version: "3.15", tox-env: "py315" }
     name: Python ${{ matrix.python-version }} tests
     steps:
       - uses: actions/checkout@v5
