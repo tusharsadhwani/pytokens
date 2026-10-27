@@ -34,8 +34,10 @@ jobs:
             | pyp 'json.dumps({"only": x, "os": "ubuntu-24.04-arm"})' \
             && cibuildwheel --print-build-identifiers --platform macos --archs arm64 \
             | pyp 'json.dumps({"only": x, "os": "macos-latest"})' \
-            && cibuildwheel --print-build-identifiers --platform windows \
-            | pyp 'json.dumps({"only": x, "os": "windows-latest"})'
+            && cibuildwheel --print-build-identifiers --platform windows --archs AMD64 \
+            | pyp 'json.dumps({"only": x, "os": "windows-latest"})' \
+            && cibuildwheel --print-build-identifiers --platform windows --archs ARM64 \
+            | pyp 'json.dumps({"only": x, "os": "windows-11-arm"})'
           } | pyp 'json.dumps(list(map(json.loads, lines)))' > /tmp/matrix
       - name: generate matrix (PR)
         if: github.event_name == 'pull_request'
